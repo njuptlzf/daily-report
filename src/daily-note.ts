@@ -13,12 +13,6 @@
 
 import { DateTime } from "luxon";
 
-/** Extract a human-readable message from an unknown thrown value. */
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return String(e);
-}
-
 /**
  * Compute the daily note path for a given date.
  *
@@ -129,9 +123,9 @@ export function formatDate(date: DateTime, format: string): string {
 
   try {
     return date.toFormat(format);
-  } catch (e: unknown) {
+  } catch (e) {
     console.warn(
-      `[Daily Report] Invalid date format "${format}": ${errorMessage(e)}`
+      `[Daily Report] Invalid date format "${format}": ${(e as Error).message}`
     );
     return format;
   }

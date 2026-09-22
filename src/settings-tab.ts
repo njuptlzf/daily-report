@@ -2,7 +2,7 @@
  * Settings tab for the Daily Report plugin.
  */
 
-import { App, PluginSettingTab, Setting, SettingDefinitionItem, TFile, Notice } from "obsidian";
+import { App, PluginSettingTab, Setting, TFile, Notice } from "obsidian";
 import { DateTime } from "luxon";
 import type DailyReportPlugin from "../main";
 import { DEFAULT_SETTINGS } from "./settings";
@@ -32,7 +32,7 @@ export class DailyReportSettingTab extends PluginSettingTab {
    * Supports: line breaks, **bold**, ~~strikethrough~~, and code blocks.
    */
   private renderMarkdown(text: string): DocumentFragment {
-    const fragment = createFragment();
+    const fragment = document.createDocumentFragment();
     const lines = text.split("\n");
     let inCodeBlock = false;
     let codeContent: string[] = [];
@@ -44,8 +44,8 @@ export class DailyReportSettingTab extends PluginSettingTab {
       if (line.trim().startsWith("```")) {
         if (inCodeBlock) {
           // End of code block
-          const pre = document.createEl("pre");
-          const code = document.createEl("code");
+          const pre = document.createElement("pre");
+          const code = document.createElement("code");
           code.textContent = codeContent.join("\n");
           pre.appendChild(code);
           fragment.appendChild(pre);
@@ -64,14 +64,14 @@ export class DailyReportSettingTab extends PluginSettingTab {
       }
 
       // Process inline formatting
-      const span = document.createEl("span");
+      const span = document.createElement("span");
       let remaining = line;
 
       while (remaining.length > 0) {
         // Check for bold
         const boldMatch = remaining.match(/^\*\*([^*]+)\*\*(.*)/);
         if (boldMatch) {
-          const strong = document.createEl("strong");
+          const strong = document.createElement("strong");
           strong.textContent = boldMatch[1];
           span.appendChild(strong);
           remaining = boldMatch[2];
@@ -81,7 +81,7 @@ export class DailyReportSettingTab extends PluginSettingTab {
         // Check for strikethrough
         const delMatch = remaining.match(/^~~([^~]+)~~(.*)/);
         if (delMatch) {
-          const del = document.createEl("del");
+          const del = document.createElement("del");
           del.textContent = delMatch[1];
           span.appendChild(del);
           remaining = delMatch[2];
@@ -97,7 +97,7 @@ export class DailyReportSettingTab extends PluginSettingTab {
 
       fragment.appendChild(span);
       if (i < lines.length - 1) {
-        fragment.appendChild(document.createEl("br"));
+        fragment.appendChild(document.createElement("br"));
       }
     }
 
@@ -110,7 +110,7 @@ export class DailyReportSettingTab extends PluginSettingTab {
    */
   private addPreviewToSetting(setting: Setting, format: string): HTMLElement {
     const infoEl = setting.infoEl;
-    if (!infoEl) return document.createEl("code");
+    if (!infoEl) return document.createElement("code");
 
     // Clear existing content and rebuild
     infoEl.empty();
@@ -129,155 +129,6 @@ export class DailyReportSettingTab extends PluginSettingTab {
    */
   private updatePreview(codeEl: HTMLElement, format: string): void {
     codeEl.textContent = this.renderFormatPreview(format);
-  }
-
-  /**
-   * Declarative settings API (Obsidian 1.13.0+).
-   * Returns settings definitions for the framework to render.
-   * The imperative display() method remains as fallback for older versions.
-   */
-  getSettingDefinitions(): SettingDefinitionItem[] {
-    return [
-      {
-        type: "group",
-        heading: "插件设置",
-        items: [
-          {
-            name: "日志存放位置",
-            desc: "新日志文件的父目录路径。点击按钮从 Vault 中选择目录，或手动输入路径。",
-            render: (setting) => {
-              setting
-                .addText((text) =>
-                  text
-                    .setPlaceholder(DEFAULT_SETTINGS.dailyParentFolder)
-                    .setValue(this.plugin.settings.dailyParentFolder)
-                    .onChange(async (value) => {
-                      this.plugin.settings.dailyParentFolder = value;
-                      await this.plugin.saveSettings();
-                    })
-                )
-                .addButton((btn) => {
-                  btn.setButtonText("选择目录...").setCta().onClick(() => {
-                    new FolderSuggester(this.app, (folder: string) => {
-                      this.plugin.settings.dailyParentFolder = folder;
-                      void this.plugin.saveSettings();
-                    }).open();
-                  });
-                });
-            },
-          },
-          {
-            name: "日志文件名格式",
-            desc: "Luxon 日期格式，用 / 分隔目录层级，[] 包裹字面文本。",
-            render: (setting) => {
-              setting.addText((text) =>
-                text
-                  .setPlaceholder(DEFAULT_SETTINGS.dailyPathFormat)
-                  .setValue(this.plugin.settings.dailyPathFormat)
-                  .onChange(async (value) => {
-                    this.plugin.settings.dailyPathFormat = value;
-                    await this.plugin.saveSettings();
-                  })
-              );
-              const infoEl = setting.infoEl;
-              if (infoEl) {
-                infoEl.empty();
-                infoEl.append("当前预览: ");
-                const codeEl = infoEl.createEl("code", {
-                  text: this.renderFormatPreview(this.plugin.settings.dailyPathFormat),
-                });
-                codeEl.addClass("setting-item-info-preview-value");
-                const inputEl = setting.controlEl.querySelector("input");
-                if (inputEl) {
-                  inputEl.addEventListener("input", () => {
-                    codeEl.textContent = this.renderFormatPreview(inputEl.value);
-                  });
-                }
-              }
-            },
-          },
-          {
-            name: "模板文件",
-            desc:
-              "点击按钮从 Vault 中选择模板文件。模板支持日期占位符: " +
-              "**date:FORMAT**、${date:FORMAT}、{{date:FORMAT}}",
-            render: (setting) => {
-              setting
-                .addText((text) =>
-                  text
-                    .setPlaceholder(DEFAULT_SETTINGS.templatePath)
-                    .setValue(this.plugin.settings.templatePath)
-                    .onChange(async (value) => {
-                      const error = validateTemplateFile(this.app, value);
-                      if (error) {
-                        new Notice(error, 5000);
-                        return;
-                      }
-                      this.plugin.settings.templatePath = value;
-                      await this.plugin.saveSettings();
-                    })
-                )
-                .addButton((btn) => {
-                  btn.setButtonText("选择文件...").setCta().onClick(() => {
-                    new TemplateFileSuggester(this.app, (file: TFile) => {
-                      const error = validateTemplateFile(this.app, file.path);
-                      if (error) {
-                        new Notice(error, 5000);
-                        return;
-                      }
-                      this.plugin.settings.templatePath = file.path;
-                      void this.plugin.saveSettings();
-                    }).open();
-                  });
-                });
-            },
-          },
-          {
-            name: "创建前确认章节状态",
-            desc: "创建新日志前，弹窗询问昨日各章节的需求状态（是否闭环）。",
-            control: { type: "toggle", key: "confirmBeforeCreate" },
-          },
-          {
-            name: "结转时删除已完成任务",
-            desc:
-              "结转时将昨日已完成的任务（- [x]）从新日志中移除。关闭则保留已完成任务作为历史记录。",
-            control: { type: "toggle", key: "deleteCompletedTasks" },
-          },
-        ],
-      },
-      {
-        type: "group",
-        heading: "模板结构说明",
-        items: [
-          {
-            name: "模板章节结构",
-            desc: this.renderMarkdown(
-              "```\n## 固定章节标题（模板固定，每天保留）\n  ### 具体需求标题（可能跨天结转）\n    #### 子任务/问题标题（清晰边界）\n      - 内容...\n      - [ ] 可选的任务标记\n```"
-            ),
-          },
-          {
-            name: "需求状态标记",
-            desc: this.renderMarkdown(
-              "**做完了（不结转）**：\n  - ~~需求标题~~ （删除线，推荐）\n  - ## 需求标题 <!-- req-status: done -->\n\n**不做了（取消，不结转）**：\n  - ## 需求标题 <!-- req-status: cancelled -->\n\n**验证中（结转）**：\n  - ## 需求标题 <!-- req-status: verifying -->\n\n**进行中（结转）**：\n  - ## 需求标题 （无标记，默认）\n  - ## 需求标题 <!-- req-status: pending -->\n\n**自动完成**：如果所有 #### 都完成了，需求自动标记为 done。\n\n**注意**：删除线只能表示「做完了」，无法表示「不做了」。\n如果要取消需求，必须用 HTML 注释标记 cancelled。"
-            ),
-          },
-        ],
-      },
-      {
-        type: "group",
-        heading: "命令",
-        items: [
-          {
-            name: "创建今日日志",
-            desc: "创建今日日志，包含模板内容、昨日未完成任务结转、章节状态确认。",
-          },
-          {
-            name: "打开今日日志",
-            desc: "打开今日日志文件（如果存在），不存在则创建。",
-          },
-        ],
-      },
-    ];
   }
 
   display(): void {
@@ -307,7 +158,7 @@ export class DailyReportSettingTab extends PluginSettingTab {
             this.app,
             (folder: string) => {
               this.plugin.settings.dailyParentFolder = folder;
-              void this.plugin.saveSettings();
+              this.plugin.saveSettings();
               this.display();
             }
           );
@@ -376,7 +227,7 @@ export class DailyReportSettingTab extends PluginSettingTab {
                 return;
               }
               this.plugin.settings.templatePath = file.path;
-              void this.plugin.saveSettings();
+              this.plugin.saveSettings();
               this.display();
             }
           );
