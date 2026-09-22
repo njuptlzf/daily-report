@@ -34,7 +34,7 @@ export class SectionConfirmModal extends Modal {
     const { contentEl, titleEl, modalEl } = this;
 
     titleEl.setText("确认昨日章节状态");
-    modalEl.style.width = "560px";
+    modalEl.addClass("section-confirm-modal");
 
     contentEl.createEl("p", {
       text:
