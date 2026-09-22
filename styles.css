@@ -1,5 +1,11 @@
 /* Daily Report plugin styles */
 
+/* Section confirmation modal width */
+.modal.section-confirm-modal {
+  width: 560px;
+  max-width: 90vw;
+}
+
 /* Settings description markdown rendering */
 .setting-item-info pre {
   background: var(--background-modifier-code-block);

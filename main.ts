@@ -36,6 +36,12 @@ import {
 } from "./src/carry-over";
 import { SectionConfirmModal } from "./src/section-confirm";
 
+/** Extract a human-readable message from an unknown thrown value. */
+function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
+
 export default class DailyReportPlugin extends Plugin {
   settings: DailyReportSettings = { ...DEFAULT_SETTINGS };
 
@@ -53,7 +59,7 @@ export default class DailyReportPlugin extends Plugin {
       "file-plus",
       "创建今日日志",
       () => {
-        this.createDailyNote();
+        void this.createDailyNote();
       }
     );
 
@@ -114,9 +120,9 @@ export default class DailyReportPlugin extends Plugin {
     let todayTemplateMarkdown = "";
     try {
       todayTemplateMarkdown = await this.readTemplate();
-    } catch (e) {
+    } catch (e: unknown) {
       new Notice(
-        `无法读取模板文件: ${(e as Error).message}\n将创建空日志。`
+        `无法读取模板文件: ${errorMessage(e)}\n将创建空日志。`
       );
       todayTemplateMarkdown = "";
     }
@@ -132,9 +138,9 @@ export default class DailyReportPlugin extends Plugin {
       if (yesterdayFile) {
         yesterdayMarkdown = await this.app.vault.read(yesterdayFile);
       }
-    } catch (e) {
+    } catch (e: unknown) {
       new Notice(
-        `无法读取昨日日志: ${(e as Error).message}\n将跳过任务结转。`
+        `无法读取昨日日志: ${errorMessage(e)}\n将跳过任务结转。`
       );
       yesterdayMarkdown = "";
     }
@@ -182,8 +188,8 @@ export default class DailyReportPlugin extends Plugin {
       );
       new Notice("今日日志已创建");
       await this.openFile(newFile);
-    } catch (e) {
-      new Notice(`无法创建今日日志: ${(e as Error).message}`);
+    } catch (e: unknown) {
+      new Notice(`无法创建今日日志: ${errorMessage(e)}`);
     }
 
     // Step 6: Save yesterday's note with updated statuses
@@ -193,8 +199,8 @@ export default class DailyReportPlugin extends Plugin {
           return result.yesterdayMarkdown;
         });
         new Notice("昨日日志状态已更新");
-      } catch (e) {
-        new Notice(`无法更新昨日日志: ${(e as Error).message}`);
+      } catch (e: unknown) {
+        new Notice(`无法更新昨日日志: ${errorMessage(e)}`);
       }
     }
   }
@@ -296,9 +302,8 @@ export default class DailyReportPlugin extends Plugin {
     // Create this folder
     try {
       await this.app.vault.createFolder(path);
-    } catch (e) {
-      // Ignore if already created (race condition)
-      if (!(e as Error).message?.includes("already exists")) {
+    } catch (e: unknown) {
+      if (!errorMessage(e).includes("already exists")) {
         throw e;
       }
     }

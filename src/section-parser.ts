@@ -125,8 +125,8 @@ export function parseSections(markdown: string): Section[] {
 
       // Pop stack until we find a parent with a lower level
       while (stack.length > 1 && stack[stack.length - 1].level >= level) {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        const popped = stack.pop()!; // safe: stack.length > 1 guaranteed
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- stack.length > 1 guarantees pop() returns a defined Section
+        const popped = stack.pop()!;
         popped.lineEnd = i - 1;
       }
 
