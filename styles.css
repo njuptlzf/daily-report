@@ -1,0 +1,79 @@
+/* Daily Report plugin styles */
+
+/* Settings description markdown rendering */
+.setting-item-info pre {
+  background: var(--background-modifier-code-block);
+  padding: 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.setting-item-info pre code {
+  font-family: var(--font-monospace);
+  font-size: 12px;
+}
+
+.setting-item-info strong {
+  font-weight: 600;
+}
+
+.setting-item-info del {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.setting-item-info {
+  white-space: normal;
+}
+
+.section-confirm-row {
+  padding: 8px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.section-confirm-row .section-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.section-confirm-row .section-progress {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.section-confirm-row .section-status-options {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.section-confirm-row .status-option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.section-confirm-row .status-option input[type="radio"] {
+  margin: 0;
+}
+
+.section-confirm-row.status-pending {
+  border-left: 3px solid var(--color-yellow);
+}
+
+.section-confirm-row.status-verifying {
+  border-left: 3px solid var(--color-blue);
+}
+
+.section-confirm-row.status-done {
+  border-left: 3px solid var(--color-green);
+}
+
+.section-confirm-row.status-cancelled {
+  border-left: 3px solid var(--color-red);
+}

@@ -1,0 +1,10 @@
+{
+  "id": "daily-report",
+  "name": "Daily Report",
+  "version": "1.0.0",
+  "minAppVersion": "1.4.0",
+  "description": "Daily notes with dynamic directory paths, template rendering, task carry-over, and section-level confirmation.",
+  "author": "Daily Report Team",
+  "authorUrl": "https://github.com/daily-report",
+  "isDesktopOnly": false
+}
