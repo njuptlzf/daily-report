@@ -4,6 +4,7 @@
  */
 
 import { App, SuggestModal, TFile, TFolder } from "obsidian";
+import { t } from "./i18n";
 
 /**
  * Refresh suggestions by clearing input and triggering event.
@@ -31,15 +32,15 @@ export class TemplateFileSuggester extends SuggestModal<string> {
     super(app);
     this.onSelect = onSelect;
     this.limit = 100;
-    this.emptyStateText = "当前目录没有 Markdown 文件";
+    this.emptyStateText = t("suggest.file.empty");
 
-    this.setPlaceholder("输入文件名或 / 进入目录...");
+    this.setPlaceholder(t("suggest.file.placeholder"));
 
     this.setInstructions([
-      { command: "↑↓", purpose: "选择" },
-      { command: "Enter", purpose: "选择/进入" },
-      { command: "../", purpose: "返回上级" },
-      { command: "Esc", purpose: "取消" },
+      { command: "↑↓", purpose: t("suggest.instr.select") },
+      { command: "Enter", purpose: t("suggest.instr.enter") },
+      { command: "../", purpose: t("suggest.instr.up") },
+      { command: "Esc", purpose: t("suggest.instr.cancel") },
     ]);
   }
 
@@ -158,21 +159,21 @@ export function validateTemplateFile(
   filePath: string
 ): string | null {
   if (!filePath || filePath.trim() === "") {
-    return "模板文件路径不能为空";
+    return t("validate.file.empty");
   }
 
   const file = app.vault.getAbstractFileByPath(filePath);
 
   if (!file) {
-    return `文件不存在: ${filePath}`;
+    return t("validate.file.notFound", { path: filePath });
   }
 
   if (!(file instanceof TFile)) {
-    return `路径不是文件: ${filePath}`;
+    return t("validate.file.notFile", { path: filePath });
   }
 
   if (!filePath.endsWith(".md")) {
-    return `模板文件必须是 Markdown 文件: ${filePath}`;
+    return t("validate.file.notMd", { path: filePath });
   }
 
   return null;
@@ -196,15 +197,15 @@ export class FolderSuggester extends SuggestModal<string> {
     this.onSelect = onSelect;
     this.rootMode = options?.rootMode ?? false;
     this.limit = 100;
-    this.emptyStateText = "当前路径没有子目录";
+    this.emptyStateText = t("suggest.folder.empty");
 
-    this.setPlaceholder("输入目录名或 / 进入目录...");
+    this.setPlaceholder(t("suggest.folder.placeholder"));
 
     this.setInstructions([
-      { command: "↑↓", purpose: "选择" },
-      { command: "Enter", purpose: "选择/进入" },
-      { command: "../", purpose: "返回上级" },
-      { command: "Esc", purpose: "取消" },
+      { command: "↑↓", purpose: t("suggest.instr.select") },
+      { command: "Enter", purpose: t("suggest.instr.enter") },
+      { command: "../", purpose: t("suggest.instr.up") },
+      { command: "Esc", purpose: t("suggest.instr.cancel") },
     ]);
   }
 
@@ -232,7 +233,7 @@ export class FolderSuggester extends SuggestModal<string> {
     const results: string[] = [];
 
     // Add "select current folder" option (filtered by query)
-    const currentLabel = path ? path : "(根目录)";
+    const currentLabel = path ? path : t("suggest.root");
     if (!queryLower || currentLabel.toLowerCase().includes(queryLower)) {
       results.push("✓ " + currentLabel);
     }
@@ -320,7 +321,7 @@ export function validateParentFolder(
   if (file) {
     // Folder exists, check if it's actually a folder
     if (file instanceof TFile) {
-      return `路径是文件而不是目录: ${folderPath}`;
+      return t("validate.folder.isFile", { path: folderPath });
     }
   }
 

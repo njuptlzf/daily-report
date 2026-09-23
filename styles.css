@@ -6,10 +6,14 @@
   max-width: 90vw;
 }
 
-/* Settings help docs (rendered via MarkdownRenderer) */
-.dr-doc-title {
-  font-weight: 600;
-  margin: 18px 0 6px;
+/* Help modal (rendered via MarkdownRenderer) */
+.modal.dr-help-modal {
+  width: min(760px, 92vw);
+}
+
+.modal.dr-help-modal .modal-content {
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 .dr-doc {

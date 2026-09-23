@@ -35,6 +35,7 @@ import {
   carryOver,
 } from "./src/carry-over";
 import { SectionConfirmModal } from "./src/section-confirm";
+import { t, setLocale } from "./src/i18n";
 
 /** Extract a human-readable message from an unknown thrown value. */
 function errorMessage(e: unknown): string {
@@ -47,8 +48,8 @@ export default class DailyReportPlugin extends Plugin {
 
   async onload(): Promise<void> {
     try {
-      console.log("[daily-report] onload start");
       await this.loadSettings();
+      setLocale(this.settings.language);
 
       // Register settings tab
       this.addSettingTab(new DailyReportSettingTab(this.app, this));
@@ -59,15 +60,14 @@ export default class DailyReportPlugin extends Plugin {
       // Add ribbon icon (sidebar icon)
       this.addRibbonIcon(
         "file-plus",
-        "创建今日日志",
+        t("cmd.create.name"),
         () => {
           void this.createDailyNote();
         }
       );
 
       // Status notice
-      new Notice("Daily Report 插件已加载");
-      console.log("[daily-report] onload done");
+      new Notice(t("notice.loaded"));
     } catch (e) {
       console.error("[daily-report] onload failed:", e);
       throw e;
@@ -90,7 +90,7 @@ export default class DailyReportPlugin extends Plugin {
     // Command 1: Create daily note
     this.addCommand({
       id: "create-daily-note",
-      name: "创建今日日志",
+      name: t("cmd.create.name"),
       callback: async () => {
         await this.createDailyNote();
       },
@@ -99,7 +99,7 @@ export default class DailyReportPlugin extends Plugin {
     // Command 2: Open daily note
     this.addCommand({
       id: "open-daily-note",
-      name: "打开今日日志",
+      name: t("cmd.open.name"),
       callback: async () => {
         await this.openDailyNote();
       },
@@ -118,7 +118,7 @@ export default class DailyReportPlugin extends Plugin {
     // Check if today's note already exists
     const existingFile = this.findFile(todayPath);
     if (existingFile) {
-      new Notice("今日日志已存在，正在打开...");
+      new Notice(t("notice.exists"));
       await this.openFile(existingFile);
       return;
     }
@@ -128,9 +128,7 @@ export default class DailyReportPlugin extends Plugin {
     try {
       todayTemplateMarkdown = await this.readTemplate();
     } catch (e: unknown) {
-      new Notice(
-        `无法读取模板文件: ${errorMessage(e)}\n将创建空日志。`
-      );
+      new Notice(t("error.readTemplate", { msg: errorMessage(e) }));
       todayTemplateMarkdown = "";
     }
 
@@ -146,9 +144,7 @@ export default class DailyReportPlugin extends Plugin {
         yesterdayMarkdown = await this.app.vault.read(yesterdayFile);
       }
     } catch (e: unknown) {
-      new Notice(
-        `无法读取昨日日志: ${errorMessage(e)}\n将跳过任务结转。`
-      );
+      new Notice(t("error.readYesterday", { msg: errorMessage(e) }));
       yesterdayMarkdown = "";
     }
 
@@ -190,10 +186,10 @@ export default class DailyReportPlugin extends Plugin {
         `${todayPath}.md`,
         result.todayMarkdown
       );
-      new Notice("今日日志已创建");
+      new Notice(t("notice.created"));
       await this.openFile(newFile);
     } catch (e: unknown) {
-      new Notice(`无法创建今日日志: ${errorMessage(e)}`);
+      new Notice(t("error.createNote", { msg: errorMessage(e) }));
     }
 
     // Step 6: Save yesterday's note with updated statuses
@@ -202,9 +198,9 @@ export default class DailyReportPlugin extends Plugin {
         await this.app.vault.process(yesterdayFile, () => {
           return result.yesterdayMarkdown;
         });
-        new Notice("昨日日志状态已更新");
+        new Notice(t("notice.statusUpdated"));
       } catch (e: unknown) {
-        new Notice(`无法更新昨日日志: ${errorMessage(e)}`);
+        new Notice(t("error.updateYesterday", { msg: errorMessage(e) }));
       }
     }
   }
@@ -248,11 +244,11 @@ export default class DailyReportPlugin extends Plugin {
     const templateFile = this.app.vault.getAbstractFileByPath(templatePath);
 
     if (!templateFile) {
-      throw new Error(`模板文件不存在: ${templatePath}`);
+      throw new Error(t("error.templateMissing", { path: templatePath }));
     }
 
     if (!(templateFile instanceof TFile)) {
-      throw new Error(`模板路径不是文件: ${templatePath}`);
+      throw new Error(t("error.templateNotFile", { path: templatePath }));
     }
 
     const rawTemplate = await this.app.vault.read(templateFile);

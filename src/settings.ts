@@ -1,5 +1,10 @@
 export interface DailyReportSettings {
   /**
+   * UI language. "auto" follows Obsidian's app language (getLanguage()).
+   */
+  language: "auto" | "en" | "zh";
+
+  /**
    * Parent folder for daily notes (static path, no date tokens).
    * Example: "daily" or "日记/工作"
    */
@@ -41,6 +46,7 @@ export interface DailyReportSettings {
 }
 
 export const DEFAULT_SETTINGS: DailyReportSettings = {
+  language: "auto",
   dailyParentFolder: "daily",
   dailyPathFormat: "YYYY/MM/[第]WW[周]/MMDD",
   templatePath: "template/default.md",

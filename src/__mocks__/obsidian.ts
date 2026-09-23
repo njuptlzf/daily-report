@@ -4,6 +4,10 @@ import { DateTime } from "luxon";
 
 export { DateTime };
 
+export function getLanguage(): string {
+  return "en";
+}
+
 export class App {
   vault!: object;
   workspace!: object;

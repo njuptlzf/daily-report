@@ -9,14 +9,15 @@
 
 import { App, Modal, Setting } from "obsidian";
 import { SectionInfo } from "./carry-over";
+import { t } from "./i18n";
 
 export type StatusDecision = "pending" | "verifying" | "done" | "cancelled";
 
-const STATUSES: { value: StatusDecision; label: string }[] = [
-  { value: "pending", label: "进行中" },
-  { value: "verifying", label: "验证中" },
-  { value: "done", label: "已完成" },
-  { value: "cancelled", label: "已取消" },
+const STATUS_VALUES: StatusDecision[] = [
+  "pending",
+  "verifying",
+  "done",
+  "cancelled",
 ];
 
 function isTerminal(status: StatusDecision): boolean {
@@ -47,33 +48,29 @@ export class SectionConfirmModal extends Modal {
     this.selected.set(title, initial);
 
     const optionsDiv = container.createDiv({ cls: "section-status-options" });
-    for (const status of STATUSES) {
+    for (const value of STATUS_VALUES) {
       const labelEl = optionsDiv.createEl("label", { cls: "status-option" });
       const input = labelEl.createEl("input", {
         type: "radio",
-        value: status.value,
+        value,
       }) as HTMLInputElement;
-      input.checked = status.value === initial;
+      input.checked = value === initial;
       input.addEventListener("change", () => {
         if (!input.checked) return;
-        this.selected.set(title, status.value);
-        onChange?.(status.value);
+        this.selected.set(title, value);
+        onChange?.(value);
       });
-      labelEl.createSpan({ text: status.label });
+      labelEl.createSpan({ text: t(`status.${value}`) });
     }
   }
 
   onOpen(): void {
     const { contentEl, titleEl, modalEl } = this;
 
-    titleEl.setText("确认昨日章节状态");
+    titleEl.setText(t("modal.title"));
     modalEl.addClass("section-confirm-modal");
 
-    contentEl.createEl("p", {
-      text:
-        "以下需求来自昨日日志。若需求已闭环请选择「已完成」，不再处理其子任务；" +
-        "若仍在进行请选择「进行中」或「验证中」，再逐项确认其子任务的结转状态。",
-    });
+    contentEl.createEl("p", { text: t("modal.intro") });
 
     for (const info of this.sections) {
       const row = contentEl.createDiv({
@@ -83,7 +80,10 @@ export class SectionConfirmModal extends Modal {
       row.createDiv({ cls: "section-title", text: "### " + info.title });
       row.createDiv({
         cls: "section-progress",
-        text: `任务完成度: ${info.completedTasks}/${info.totalTasks}`,
+        text: t("modal.progress", {
+          done: info.completedTasks,
+          total: info.totalTasks,
+        }),
       });
 
       // Subtasks container: visible only while the requirement stays open.
@@ -91,7 +91,7 @@ export class SectionConfirmModal extends Modal {
       if (info.children.length > 0) {
         subtasksEl.createDiv({
           cls: "section-subtasks-label",
-          text: "子任务结转状态：",
+          text: t("modal.subtasksLabel"),
         });
         for (const child of info.children) {
           const childRow = subtasksEl.createDiv({
@@ -121,7 +121,7 @@ export class SectionConfirmModal extends Modal {
     new Setting(contentEl)
       .setName("")
       .addButton((btn) =>
-        btn.setButtonText("确认").setCta().onClick(() => {
+        btn.setButtonText(t("modal.confirm")).setCta().onClick(() => {
           this.onComplete?.(this.collectDecisions());
           this.close();
         })
@@ -130,7 +130,7 @@ export class SectionConfirmModal extends Modal {
     new Setting(contentEl)
       .setName("")
       .addButton((btn) =>
-        btn.setButtonText("跳过（全部保持进行中）").onClick(() => {
+        btn.setButtonText(t("modal.skip")).onClick(() => {
           for (const info of this.sections) {
             this.selected.set(info.title, "pending");
             for (const child of info.children) {
@@ -145,7 +145,7 @@ export class SectionConfirmModal extends Modal {
     new Setting(contentEl)
       .setName("")
       .addButton((btn) =>
-        btn.setButtonText("取消").onClick(() => {
+        btn.setButtonText(t("modal.cancel")).onClick(() => {
           this.onComplete = null;
           this.close();
         })
