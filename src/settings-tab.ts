@@ -252,13 +252,13 @@ export class DailyReportSettingTab extends PluginSettingTab {
           {
             name: "模板章节结构",
             desc: this.renderMarkdown(
-              "```\n## 固定章节标题（模板固定，每天保留）\n  ### 具体需求标题（可能跨天结转）\n    #### 子任务/问题标题（清晰边界）\n      - 内容...\n      - [ ] 可选的任务标记\n```"
+              "```\n## 固定章节标题（模板固定，每天保留，不打状态标记）\n  ### 具体需求标题（跨天结转，打状态标记）\n    #### 子任务/问题标题（清晰边界，打状态标记）\n      - 内容...\n      - [ ] 可选的任务标记\n```"
             ),
           },
           {
             name: "需求状态标记",
             desc: this.renderMarkdown(
-              "**做完了（不结转）**：\n  - ~~需求标题~~ （删除线，推荐）\n  - ## 需求标题 <!-- req-status: done -->\n\n**不做了（取消，不结转）**：\n  - ## 需求标题 <!-- req-status: cancelled -->\n\n**验证中（结转）**：\n  - ## 需求标题 <!-- req-status: verifying -->\n\n**进行中（结转）**：\n  - ## 需求标题 （无标记，默认）\n  - ## 需求标题 <!-- req-status: pending -->\n\n**自动完成**：如果所有 #### 都完成了，需求自动标记为 done。\n\n**注意**：删除线只能表示「做完了」，无法表示「不做了」。\n如果要取消需求，必须用 HTML 注释标记 cancelled。"
+              "**做完了（不结转）**：\n  - ~~需求标题~~ （删除线，推荐）\n  - ### 需求标题 <!-- req-status: done -->\n\n**不做了（取消，不结转）**：\n  - ### 需求标题 <!-- req-status: cancelled -->\n\n**验证中（结转）**：\n  - ### 需求标题 <!-- req-status: verifying -->\n\n**进行中（结转）**：\n  - ### 需求标题 （无标记，默认）\n  - ### 需求标题 <!-- req-status: pending -->\n\n**说明**：状态标记只加在 ### 需求与 #### 子任务上，固定的 # / ## 章节不加。需求选「已完成/已取消」后，其 #### 子任务不再询问。\n\n**注意**：删除线只能表示「做完了」，无法表示「不做了」。如果要取消需求，必须用 HTML 注释标记 cancelled。"
             ),
           },
         ],
@@ -419,9 +419,9 @@ export class DailyReportSettingTab extends PluginSettingTab {
       .setName("模板章节结构")
       .setDesc(this.renderMarkdown(
         "```" +
-        "\n## 固定章节标题（模板固定，每天保留）" +
-        "\n  ### 具体需求标题（可能跨天结转）" +
-        "\n    #### 子任务/问题标题（清晰边界）" +
+        "\n## 固定章节标题（模板固定，每天保留，不打状态标记）" +
+        "\n  ### 具体需求标题（跨天结转，打状态标记）" +
+        "\n    #### 子任务/问题标题（清晰边界，打状态标记）" +
         "\n      - 内容..." +
         "\n      - [ ] 可选的任务标记" +
         "\n```"
@@ -433,15 +433,16 @@ export class DailyReportSettingTab extends PluginSettingTab {
       .setDesc(this.renderMarkdown(
         "**做完了（不结转）**：" +
         "\n  - ~~需求标题~~ （删除线，推荐）" +
-        "\n  - ## 需求标题 <!-- req-status: done -->" +
+        "\n  - ### 需求标题 <!-- req-status: done -->" +
         "\n\n**不做了（取消，不结转）**：" +
-        "\n  - ## 需求标题 <!-- req-status: cancelled -->" +
+        "\n  - ### 需求标题 <!-- req-status: cancelled -->" +
         "\n\n**验证中（结转）**：" +
-        "\n  - ## 需求标题 <!-- req-status: verifying -->" +
+        "\n  - ### 需求标题 <!-- req-status: verifying -->" +
         "\n\n**进行中（结转）**：" +
-        "\n  - ## 需求标题 （无标记，默认）" +
-        "\n  - ## 需求标题 <!-- req-status: pending -->" +
-        "\n\n**自动完成**：如果所有 #### 都完成了，需求自动标记为 done。" +
+        "\n  - ### 需求标题 （无标记，默认）" +
+        "\n  - ### 需求标题 <!-- req-status: pending -->" +
+        "\n\n**说明**：状态标记只加在 ### 需求与 #### 子任务上，固定的 # / ## 章节不加。" +
+        "需求选「已完成/已取消」后，其 #### 子任务不再询问。" +
         "\n\n**注意**：删除线只能表示「做完了」，无法表示「不做了」。" +
         "\n如果要取消需求，必须用 HTML 注释标记 cancelled。"
       ));

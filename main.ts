@@ -153,16 +153,13 @@ export default class DailyReportPlugin extends Plugin {
       yesterdayMarkdown &&
       yesterdayMarkdown.length > 0
     ) {
-      const sectionsNeedingConfirm = analyzeSectionsForConfirmation(
+      const requirements = analyzeSectionsForConfirmation(
         yesterdayMarkdown
       );
-      const needsConfirm = sectionsNeedingConfirm.filter(
-        (s) => s.needsConfirm
-      );
 
-      if (needsConfirm.length > 0) {
+      if (requirements.length > 0) {
         const userDecisions = await this.showConfirmationModal(
-          sectionsNeedingConfirm
+          requirements
         );
         if (userDecisions) {
           for (const [title, status] of userDecisions) {

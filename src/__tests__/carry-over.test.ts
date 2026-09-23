@@ -1,232 +1,149 @@
 import { describe, it, expect } from "vitest";
 import {
   analyzeSectionsForConfirmation,
-  getSectionsToCarryOver,
-  extractFilteredSectionMarkdown,
+  mergeSections,
   applyStatusDecisions,
   carryOver,
 } from "../carry-over";
-import { parseSections, SectionStatus } from "../section-parser";
+import { SectionStatus } from "../section-parser";
+
+// A realistic note: # and ## are fixed skeleton; ### are requirements;
+// #### are subtasks.
+const YESTERDAY = [
+  "# 日报",
+  "",
+  "## 今日AI",
+  "",
+  "### 需求A <!-- req-status: pending -->",
+  "- [x] 任务1",
+  "",
+  "### 需求B",
+  "#### 子任务B1",
+  "- [ ] 未完成",
+  "",
+  "## 其他",
+  "",
+  "### 需求C <!-- req-status: done -->",
+  "- [x] 完成",
+].join("\n");
 
 describe("analyzeSectionsForConfirmation", () => {
-  it("returns sections that need confirmation", () => {
-    const markdown =
-      "## Section A <!-- req-status: pending -->\n" +
-      "- [x] Done task\n" +
-      "\n" +
-      "## Section B <!-- req-status: pending -->\n" +
-      "- [ ] Pending task\n" +
-      "\n" +
-      "## Section C <!-- req-status: done -->\n" +
-      "- [x] Done task";
-
-    const info = analyzeSectionsForConfirmation(markdown);
-    // Section A needs confirmation (all tasks done, pending status)
-    // Section B does NOT need confirmation (has pending tasks)
-    // Section C is already done, should be skipped
-    const needsConfirm = info.filter((i) => i.needsConfirm);
-    expect(needsConfirm).toHaveLength(1);
-    expect(needsConfirm[0].title).toBe("Section A");
+  it("returns only ### requirements, never # or ##", () => {
+    const info = analyzeSectionsForConfirmation(YESTERDAY);
+    const titles = info.map((i) => i.title);
+    expect(titles).toContain("需求A");
+    expect(titles).toContain("需求B");
+    expect(titles).not.toContain("日报"); // #
+    expect(titles).not.toContain("今日AI"); // ##
+    expect(titles).not.toContain("子任务B1"); // #### is a child, not a root
   });
 
-  it("reports task counts correctly", () => {
-    const markdown =
-      "## Section A <!-- req-status: pending -->\n" +
-      "- [x] Done 1\n" +
-      "- [x] Done 2\n" +
-      "- [ ] Pending 1";
-
-    const info = analyzeSectionsForConfirmation(markdown);
-    const sectionA = info.find((i) => i.title === "Section A");
-    expect(sectionA).toBeDefined();
-    expect(sectionA!.totalTasks).toBe(3);
-    expect(sectionA!.completedTasks).toBe(2);
-    expect(sectionA!.pendingTasks).toBe(1);
-    expect(sectionA!.needsConfirm).toBe(false); // Has pending tasks
+  it("skips terminal requirements", () => {
+    const info = analyzeSectionsForConfirmation(YESTERDAY);
+    expect(info.map((i) => i.title)).not.toContain("需求C");
   });
 
-  it("handles sections with no tasks", () => {
-    const markdown = "## Empty Section <!-- req-status: pending -->\nNo tasks here";
+  it("attaches non-terminal #### children and records the parent ##", () => {
+    const info = analyzeSectionsForConfirmation(YESTERDAY);
+    const reqB = info.find((i) => i.title === "需求B")!;
+    expect(reqB.parentTitle).toBe("今日AI");
+    expect(reqB.children.map((c) => c.title)).toContain("子任务B1");
+    // 需求A has no #### children
+    const reqA = info.find((i) => i.title === "需求A")!;
+    expect(reqA.children).toHaveLength(0);
+  });
 
-    const info = analyzeSectionsForConfirmation(markdown);
+  it("marks a requirement as needing confirmation only when all tasks are done", () => {
+    const info = analyzeSectionsForConfirmation(YESTERDAY);
+    expect(info.find((i) => i.title === "需求A")!.needsConfirm).toBe(true);
+    expect(info.find((i) => i.title === "需求B")!.needsConfirm).toBe(false);
+  });
+
+  it("treats a first-day note without markers as pending", () => {
+    const noMarkers = "## 今日AI\n\n### 需求X\n- [ ] 任务";
+    const info = analyzeSectionsForConfirmation(noMarkers);
     expect(info).toHaveLength(1);
-    expect(info[0].needsConfirm).toBe(true);
-    expect(info[0].totalTasks).toBe(0);
-  });
-});
-
-describe("getSectionsToCarryOver", () => {
-  it("carries over pending sections with unchecked tasks", () => {
-    const markdown =
-      "## Section A <!-- req-status: pending -->\n" +
-      "- [ ] Task 1\n" +
-      "\n" +
-      "## Section B <!-- req-status: pending -->\n" +
-      "- [x] Done task";
-
-    const sections = getSectionsToCarryOver(markdown, new Map());
-    // Section A has unchecked tasks → carry over
-    // Section B has no unchecked tasks but is pending → carry over (user will confirm)
-    expect(sections).toHaveLength(2);
-  });
-
-  it("skips done sections", () => {
-    const markdown =
-      "## Section A <!-- req-status: pending -->\n" +
-      "- [ ] Task 1\n" +
-      "\n" +
-      "## Section B <!-- req-status: done -->\n" +
-      "- [ ] Task 2";
-
-    const sections = getSectionsToCarryOver(markdown, new Map());
-    expect(sections).toHaveLength(1);
-    expect(sections[0].title).toBe("Section A");
-  });
-
-  it("skips cancelled sections", () => {
-    const markdown =
-      "## Section A <!-- req-status: cancelled -->\n" +
-      "- [ ] Task 1";
-
-    const sections = getSectionsToCarryOver(markdown, new Map());
-    expect(sections).toHaveLength(0);
-  });
-
-  it("applies user decisions", () => {
-    const markdown =
-      "## Section A <!-- req-status: pending -->\n" +
-      "- [x] Done task";
-
-    const decisions = new Map<string, SectionStatus>([
-      ["Section A", "done"],
-    ]);
-    const sections = getSectionsToCarryOver(markdown, decisions);
-    // Section A was marked done, should not be carried over
-    expect(sections).toHaveLength(0);
-  });
-});
-
-describe("extractFilteredSectionMarkdown", () => {
-  it("keeps all tasks when deleteCompleted is false", () => {
-    const markdown =
-      "## Section\n- [ ] Pending task\n- [x] Done task";
-    const sections = parseSections(markdown);
-    const extracted = extractFilteredSectionMarkdown(
-      markdown,
-      sections[0],
-      false
-    );
-    expect(extracted).toContain("- [ ] Pending task");
-    expect(extracted).toContain("- [x] Done task");
-  });
-
-  it("removes completed tasks when deleteCompleted is true", () => {
-    const markdown =
-      "## Section\n- [ ] Pending task\n- [x] Done task";
-    const sections = parseSections(markdown);
-    const extracted = extractFilteredSectionMarkdown(
-      markdown,
-      sections[0],
-      true
-    );
-    expect(extracted).toContain("- [ ] Pending task");
-    expect(extracted).not.toContain("- [x] Done task");
+    expect(info[0].status).toBe("pending");
   });
 });
 
 describe("applyStatusDecisions", () => {
-  it("updates section status markers", () => {
-    const markdown =
-      "## Section A <!-- req-status: pending -->\n" +
-      "- [x] Done task";
-
+  it("writes markers on ### but never on the fixed ## skeleton", () => {
     const decisions = new Map<string, SectionStatus>([
-      ["Section A", "done"],
+      ["需求A", "done"],
+      ["今日AI", "done"], // a ## must be ignored even if a decision targets it
     ]);
-    const updated = applyStatusDecisions(markdown, decisions);
-    expect(updated).toContain("~~Section A~~");
-    expect(updated).not.toContain("<!-- req-status: pending -->");
+    const updated = applyStatusDecisions(YESTERDAY, decisions);
+    expect(updated).toContain("### ~~需求A~~");
+    expect(updated).toContain("## 今日AI"); // unchanged, no marker/strikethrough
+    expect(updated).not.toContain("~~今日AI~~");
   });
 
-  it("returns original markdown when no decisions", () => {
-    const markdown = "## Section\nContent";
-    const updated = applyStatusDecisions(markdown, new Map());
-    expect(updated).toBe(markdown);
+  it("adds a pending marker to a requirement that had none", () => {
+    const decisions = new Map<string, SectionStatus>([["需求B", "pending"]]);
+    const updated = applyStatusDecisions(YESTERDAY, decisions);
+    expect(updated).toContain("### 需求B <!-- req-status: pending -->");
+  });
+
+  it("returns the original markdown when there are no decisions", () => {
+    expect(applyStatusDecisions(YESTERDAY, new Map())).toBe(YESTERDAY);
+  });
+});
+
+describe("mergeSections", () => {
+  const TEMPLATE = ["# 今日", "", "## 今日AI", "", "### placeholder"].join("\n");
+
+  it("carries open requirements under their matching fixed ## section", () => {
+    const decisions = new Map<string, SectionStatus>([
+      ["需求A", "pending"],
+      ["需求B", "pending"],
+    ]);
+    const merged = mergeSections(TEMPLATE, YESTERDAY, decisions, false);
+    // Both requirements appear after the 今日AI heading and before 其他 content.
+    const aiIndex = merged.indexOf("## 今日AI");
+    const aIndex = merged.indexOf("### 需求A");
+    const bIndex = merged.indexOf("### 需求B");
+    expect(aIndex).toBeGreaterThan(aiIndex);
+    expect(bIndex).toBeGreaterThan(aiIndex);
+  });
+
+  it("does not carry a requirement the user closed", () => {
+    const decisions = new Map<string, SectionStatus>([
+      ["需求A", "done"],
+      ["需求B", "pending"],
+    ]);
+    const merged = mergeSections(TEMPLATE, YESTERDAY, decisions, false);
+    expect(merged).not.toContain("### 需求A");
+    expect(merged).toContain("### 需求B");
+  });
+
+  it("drops a #### subtask the user closed but keeps its siblings", () => {
+    const decisions = new Map<string, SectionStatus>([
+      ["需求B", "pending"],
+      ["子任务B1", "cancelled"],
+    ]);
+    const merged = mergeSections(TEMPLATE, YESTERDAY, decisions, false);
+    expect(merged).toContain("### 需求B");
+    expect(merged).not.toContain("#### 子任务B1");
+  });
+
+  it("removes completed tasks when deleteCompleted is true", () => {
+    const decisions = new Map<string, SectionStatus>([["需求A", "pending"]]);
+    const merged = mergeSections(TEMPLATE, YESTERDAY, decisions, true);
+    expect(merged).not.toContain("- [x] 任务1");
   });
 });
 
 describe("carryOver", () => {
-  it("merges pending sections into template", () => {
-    const yesterday =
-      "## Section A <!-- req-status: pending -->\n" +
-      "- [ ] Task 1\n" +
-      "- [ ] Task 2";
-
-    const template =
-      "# Today\n\n" +
-      "## Section A <!-- req-status: pending -->\n" +
-      "Placeholder content";
-
-    const decisions = new Map<string, SectionStatus>();
-    const result = carryOver(yesterday, template, decisions, false);
-
-    // Today's note should contain the template content and the carried-over tasks
-    expect(result.todayMarkdown).toContain("# Today");
-    expect(result.todayMarkdown).toContain("Placeholder content");
-    expect(result.todayMarkdown).toContain("- [ ] Task 1");
-    expect(result.todayMarkdown).toContain("- [ ] Task 2");
-  });
-
-  it("does not carry over done sections", () => {
-    const yesterday =
-      "## Section A <!-- req-status: done -->\n" +
-      "- [x] Done task";
-
-    const template = "# Today\n\nSome template";
-
-    const decisions = new Map<string, SectionStatus>();
-    const result = carryOver(yesterday, template, decisions, false);
-
-    expect(result.todayMarkdown).toBe("# Today\n\nSome template");
+  it("produces both notes and records applied statuses", () => {
+    const decisions = new Map<string, SectionStatus>([["需求A", "done"]]);
+    const result = carryOver(YESTERDAY, "# 今日\n", decisions, false);
+    expect(result.appliedStatuses.get("需求A")).toBe("done");
+    expect(result.yesterdayMarkdown).toContain("### ~~需求A~~");
   });
 
   it("handles empty yesterday markdown", () => {
-    const template = "# Today\n\nSome template";
-
-    const decisions = new Map<string, SectionStatus>();
-    const result = carryOver("", template, decisions, false);
-
-    expect(result.todayMarkdown).toBe("# Today\n\nSome template");
-  });
-
-  it("tracks applied statuses", () => {
-    const yesterday =
-      "## Section A <!-- req-status: pending -->\n" +
-      "- [x] Done task";
-
-    const template = "# Today";
-
-    const decisions = new Map<string, SectionStatus>([
-      ["Section A", "done"],
-    ]);
-    const result = carryOver(yesterday, template, decisions, false);
-
-    expect(result.appliedStatuses.get("Section A")).toBe("done");
-    expect(result.yesterdayMarkdown).toContain("~~Section A~~");
-  });
-
-  it("deletes completed tasks when deleteCompleted is true", () => {
-    const yesterday =
-      "## Section A <!-- req-status: pending -->\n" +
-      "- [ ] Pending task\n" +
-      "- [x] Done task";
-
-    const template = "# Today";
-
-    const decisions = new Map<string, SectionStatus>();
-    const result = carryOver(yesterday, template, decisions, true);
-
-    expect(result.todayMarkdown).toContain("- [ ] Pending task");
-    expect(result.todayMarkdown).not.toContain("- [x] Done task");
+    const result = carryOver("", "# Today", new Map(), false);
+    expect(result.todayMarkdown).toBe("# Today");
   });
 });

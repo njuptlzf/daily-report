@@ -83,3 +83,29 @@
 .section-confirm-row.status-cancelled {
   border-left: 3px solid var(--color-red);
 }
+
+/* Subtasks are shown only while the parent requirement stays open */
+.section-confirm-subtasks {
+  margin-top: 8px;
+  padding-left: 16px;
+  border-left: 2px dashed var(--background-modifier-border);
+}
+
+.section-confirm-subtasks.is-hidden {
+  display: none;
+}
+
+.section-subtasks-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.section-confirm-subtask {
+  margin-bottom: 6px;
+}
+
+.section-subtask-title {
+  font-size: 13px;
+  margin-bottom: 2px;
+}
