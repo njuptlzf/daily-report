@@ -47,6 +47,7 @@ describe("analyzeSectionsForConfirmation", () => {
     const info = analyzeSectionsForConfirmation(YESTERDAY);
     const reqB = info.find((i) => i.title === "需求B")!;
     expect(reqB.parentTitle).toBe("今日AI");
+    expect(reqB.rootTitle).toBe("日报"); // top-level # for ordered context
     expect(reqB.children.map((c) => c.title)).toContain("子任务B1");
     // 需求A has no #### children
     const reqA = info.find((i) => i.title === "需求A")!;

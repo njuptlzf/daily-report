@@ -1,17 +1,20 @@
 /**
  * Section status confirmation modal.
  *
- * The main modal lists yesterday's open ### requirements as collapsed rows
- * ("> ### title"). Clicking a row opens a detail popup that renders the
- * requirement's full original markdown (### + body + #### children, styled),
- * with the carry-over status pinned at the bottom so it stays visible while the
- * content scrolls. Status is single-select; each option shows an instant CSS
- * tooltip explaining how the section flows after the choice.
+ * Main modal lists yesterday's open ### requirements. Each row shows its parent
+ * "## section" as a small line, a clickable "> ### title" (opens a detail popup
+ * with the rendered original content), a task count, and an inline status
+ * dropdown so the carry-over status can be set without opening the detail.
+ *
+ * The detail popup renders the requirement's context in document order
+ * (# -> ## -> ### -> ####) and pins the single-select status at the bottom.
+ * Status options use instant CSS tooltips.
  */
 
 import {
   App,
   Component,
+  DropdownComponent,
   MarkdownRenderer,
   Modal,
   Setting,
@@ -36,6 +39,15 @@ const STATUS_ICONS: Record<StatusDecision, string> = {
   cancelled: "x",
 };
 
+/** Build the requirement's markdown in document order: # -> ## -> ### -> ####. */
+function orderedContext(info: SectionInfo): string {
+  const parts: string[] = [];
+  if (info.rootTitle) parts.push("# " + info.rootTitle);
+  if (info.parentTitle) parts.push("## " + info.parentTitle);
+  parts.push(info.fullMarkdown);
+  return parts.join("\n\n");
+}
+
 /** Detail popup: rendered requirement content + pinned single-select status. */
 class RequirementDetailModal extends Modal {
   private chosen: StatusDecision;
@@ -55,21 +67,14 @@ class RequirementDetailModal extends Modal {
     this.modalEl.addClass("sc-detail-modal");
     const { contentEl } = this;
     contentEl.empty();
+    this.titleEl.setText(this.info.title);
 
-    this.titleEl.setText("### " + this.info.title);
-
-    // Scrollable rendered original content.
+    // Scrollable rendered original content, in heading order.
     const body = contentEl.createDiv({ cls: "sc-detail-body" });
-    if (this.info.parentTitle) {
-      body.createDiv({
-        cls: "sc-detail-parent",
-        text: "## " + this.info.parentTitle,
-      });
-    }
     const md = body.createDiv({ cls: "sc-detail-md" });
     void MarkdownRenderer.render(
       this.app,
-      this.info.fullMarkdown,
+      orderedContext(this.info),
       md,
       "",
       this.component
@@ -140,31 +145,46 @@ export class SectionConfirmModal extends Modal {
       const row = contentEl.createDiv({
         cls: "section-confirm-row status-" + info.status,
       });
+      if (info.parentTitle) {
+        row.createDiv({ cls: "sc-parent-line", text: "## " + info.parentTitle });
+      }
+
       const header = row.createDiv({ cls: "sc-row-header" });
-      const chev = header.createSpan({ cls: "sc-chevron" });
+
+      // Clickable title opens the detail popup (reading content is optional).
+      const clickable = header.createDiv({ cls: "sc-row-click" });
+      const chev = clickable.createSpan({ cls: "sc-chevron" });
       setIcon(chev, "chevron-right");
-      header.createSpan({ cls: "section-title", text: "### " + info.title });
-      const chip = header.createSpan({
-        cls: "sc-chip status-" + info.status,
-        text: t(`status.${info.status}`),
-      });
+      clickable.createSpan({ cls: "section-title", text: "### " + info.title });
+
       header.createSpan({
         cls: "sc-progress",
         text: `${info.completedTasks}/${info.totalTasks}`,
       });
 
-      row.addEventListener("click", () => {
+      const selectHost = header.createDiv({ cls: "sc-status-select" });
+      const dd = new DropdownComponent(selectHost);
+      for (const value of STATUS_VALUES) {
+        dd.addOption(value, t(`status.${value}`));
+      }
+
+      const setStatus = (status: StatusDecision) => {
+        this.selected.set(info.title, status);
+        row.className = "section-confirm-row status-" + status;
+        dd.setValue(status);
+      };
+
+      dd.setValue(info.status).onChange((value) => {
+        setStatus(value as StatusDecision);
+      });
+
+      clickable.addEventListener("click", () => {
         new RequirementDetailModal(
           this.app,
           info,
           this.component,
           this.selected.get(info.title) ?? info.status,
-          (status) => {
-            this.selected.set(info.title, status);
-            chip.textContent = t(`status.${status}`);
-            chip.className = "sc-chip status-" + status;
-            row.className = "section-confirm-row status-" + status;
-          }
+          setStatus
         ).open();
       });
     }

@@ -40,6 +40,8 @@ export interface SectionInfo {
   level: number;
   /** The fixed ## section this requirement belongs to */
   parentTitle: string;
+  /** The top-level # title this requirement is under (for ordered context) */
+  rootTitle: string;
   /** Total number of tasks in this requirement (including #### children) */
   totalTasks: number;
   /** Number of checked (completed) tasks */
@@ -125,7 +127,7 @@ export function analyzeSectionsForConfirmation(
   const mdLines = yesterdayMarkdown.split("\n");
   const result: SectionInfo[] = [];
 
-  function walk(nodes: Section[], parentTitle: string): void {
+  function walk(nodes: Section[], parentTitle: string, rootTitle: string): void {
     for (const node of nodes) {
       if (node.level === 3) {
         if (isTerminal(node.status)) continue; // already closed, skip
@@ -134,6 +136,7 @@ export function analyzeSectionsForConfirmation(
           title: node.title,
           level: node.level,
           parentTitle,
+          rootTitle,
           totalTasks: c.total,
           completedTasks: c.completed,
           pendingTasks: c.pending,
@@ -147,12 +150,16 @@ export function analyzeSectionsForConfirmation(
         });
       } else {
         // Descend through # and ## to reach the ### requirements.
-        walk(node.children, node.level === 2 ? node.title : parentTitle);
+        walk(
+          node.children,
+          node.level === 2 ? node.title : parentTitle,
+          node.level === 1 ? node.title : rootTitle
+        );
       }
     }
   }
 
-  walk(sections, "");
+  walk(sections, "", "");
   return result;
 }
 

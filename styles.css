@@ -86,10 +86,33 @@
 .section-confirm-row.status-done { border-left-color: var(--color-green); }
 .section-confirm-row.status-cancelled { border-left-color: var(--color-red); }
 
+.sc-parent-line {
+  color: var(--text-faint);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
 .sc-row-header {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.sc-row-click {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.sc-row-click:hover .section-title {
+  color: var(--text-accent);
+}
+
+.sc-status-select {
+  flex: 0 0 auto;
 }
 
 .sc-chevron {
