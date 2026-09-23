@@ -103,7 +103,7 @@ class RequirementDetailModal extends Modal {
       const input = labelEl.createEl("input", {
         type: "radio",
         value,
-      }) as HTMLInputElement;
+      });
       input.name = groupName;
       input.checked = value === this.chosen;
       input.addEventListener("change", () => {

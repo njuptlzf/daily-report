@@ -98,11 +98,11 @@ export class TemplateFileSuggester extends SuggestModal<string> {
 
   renderSuggestion(item: string, el: HTMLElement): void {
     if (item === "..") {
-      el.createEl("div", { text: "📁 ..", cls: "suggestion-item-folder" });
+      el.createDiv({ text: "📁 ..", cls: "suggestion-item-folder" });
     } else if (item.endsWith("/")) {
-      el.createEl("div", { text: "📁 " + item, cls: "suggestion-item-folder" });
+      el.createDiv({ text: "📁 " + item, cls: "suggestion-item-folder" });
     } else {
-      el.createEl("div", { text: "📄 " + item, cls: "suggestion-item-file" });
+      el.createDiv({ text: "📄 " + item, cls: "suggestion-item-file" });
     }
   }
 
@@ -213,14 +213,14 @@ export class FolderSuggester extends SuggestModal<string> {
 
   renderSuggestion(item: string, el: HTMLElement): void {
     if (item === "..") {
-      el.createEl("div", { text: "📁 ..", cls: "suggestion-item-folder" });
+      el.createDiv({ text: "📁 ..", cls: "suggestion-item-folder" });
     } else if (item.startsWith("✓ ")) {
-      el.createEl("div", {
+      el.createDiv({
         text: "✅ " + item.substring(2),
         cls: "suggestion-item-select",
       });
     } else {
-      el.createEl("div", { text: "📁 " + item, cls: "suggestion-item-folder" });
+      el.createDiv({ text: "📁 " + item, cls: "suggestion-item-folder" });
     }
   }
 
