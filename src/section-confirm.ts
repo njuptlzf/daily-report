@@ -296,10 +296,9 @@ export class SectionConfirmModal extends Modal {
       .setName("")
       .addButton((btn) =>
         btn.setButtonText(t("modal.skip")).onClick(() => {
-          for (const info of this.sections) {
-            this.selected.set(info.title, "pending");
-          }
-          this.onComplete?.(this.collectDecisions());
+          // Skip = carry over as-is: pass NO decisions, so existing markers
+          // (verifying / done / cancelled) are preserved and nothing is stripped.
+          this.onComplete?.(new Map());
           this.close();
         })
       );

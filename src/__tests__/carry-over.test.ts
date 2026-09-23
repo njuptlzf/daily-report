@@ -165,6 +165,18 @@ describe("carryOver", () => {
     expect(result.yesterdayMarkdown).toContain("### ~~需求A~~");
   });
 
+  it("Skip (no decisions) preserves an existing verifying marker, changes nothing", () => {
+    const yesterday =
+      "## 今日AI\n\n### 需求V <!-- req-status: verifying -->\n- [x] 做完";
+    const result = carryOver(yesterday, "# 今日\n\n## 今日AI\n", new Map(), false);
+    // Yesterday is left untouched (no marker stripped).
+    expect(result.yesterdayMarkdown).toBe(yesterday);
+    // Today's carried block keeps the verifying marker.
+    expect(result.todayMarkdown).toContain(
+      "### 需求V <!-- req-status: verifying -->"
+    );
+  });
+
   it("handles empty yesterday markdown", () => {
     const result = carryOver("", "# Today", new Map(), false);
     expect(result.todayMarkdown).toBe("# Today");
