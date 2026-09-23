@@ -29,6 +29,8 @@ export interface SubtaskInfo {
   totalTasks: number;
   completedTasks: number;
   pendingTasks: number;
+  /** Raw markdown body between this #### heading and its first child (or end). */
+  content: string;
 }
 
 export interface SectionInfo {
@@ -48,6 +50,8 @@ export interface SectionInfo {
   needsConfirm: boolean;
   /** The current (pre-decision) status */
   status: SectionStatus;
+  /** Raw markdown body between the ### heading and its first #### child */
+  content: string;
   /** Non-terminal #### children, asked only while this ### stays open */
   children: SubtaskInfo[];
 }
@@ -82,7 +86,19 @@ function countTasks(section: Section): {
   return { total: all.length, completed: all.length - pending, pending };
 }
 
-function toSubtaskInfo(child: Section): SubtaskInfo {
+/**
+ * The raw markdown belonging directly to a section: the lines after its heading
+ * up to (but excluding) its first child heading. This is the "content between
+ * the heading levels" the confirmation dialog lets the user peek at.
+ */
+function ownContent(mdLines: string[], section: Section): string {
+  const firstChildStart = section.children.length
+    ? Math.min(...section.children.map((c) => c.lineStart))
+    : section.lineEnd + 1;
+  return mdLines.slice(section.lineStart + 1, firstChildStart).join("\n").trim();
+}
+
+function toSubtaskInfo(child: Section, mdLines: string[]): SubtaskInfo {
   const c = countTasks(child);
   return {
     title: child.title,
@@ -90,6 +106,7 @@ function toSubtaskInfo(child: Section): SubtaskInfo {
     totalTasks: c.total,
     completedTasks: c.completed,
     pendingTasks: c.pending,
+    content: ownContent(mdLines, child),
   };
 }
 
@@ -103,6 +120,7 @@ export function analyzeSectionsForConfirmation(
   yesterdayMarkdown: string
 ): SectionInfo[] {
   const sections = parseSections(yesterdayMarkdown);
+  const mdLines = yesterdayMarkdown.split("\n");
   const result: SectionInfo[] = [];
 
   function walk(nodes: Section[], parentTitle: string): void {
@@ -119,9 +137,10 @@ export function analyzeSectionsForConfirmation(
           pendingTasks: c.pending,
           needsConfirm: needsConfirmation(node),
           status: node.status,
+          content: ownContent(mdLines, node),
           children: node.children
             .filter((ch) => ch.level === 4 && !isTerminal(ch.status))
-            .map(toSubtaskInfo),
+            .map((ch) => toSubtaskInfo(ch, mdLines)),
         });
       } else {
         // Descend through # and ## to reach the ### requirements.

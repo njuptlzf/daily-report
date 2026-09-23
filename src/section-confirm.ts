@@ -2,12 +2,14 @@
  * Section status confirmation modal.
  *
  * When creating a daily note, yesterday's ### requirements that are still open
- * are presented for a status decision. A requirement's #### subtasks are shown
- * only while the requirement stays open; closing the requirement collapses
- * (and ignores) its subtasks, reducing the number of choices.
+ * are presented for a status decision. Each requirement shows its raw content
+ * (collapsed by default, expandable) so the user can see what they are deciding
+ * about. Status options carry icons and hover tooltips that explain exactly how
+ * the section flows after the choice (matching the help doc). A requirement's
+ * #### subtasks are shown only while the requirement stays open.
  */
 
-import { App, Modal, Setting } from "obsidian";
+import { App, Modal, Setting, setIcon, setTooltip } from "obsidian";
 import { SectionInfo } from "./carry-over";
 import { t } from "./i18n";
 
@@ -19,6 +21,13 @@ const STATUS_VALUES: StatusDecision[] = [
   "done",
   "cancelled",
 ];
+
+const STATUS_ICONS: Record<StatusDecision, string> = {
+  pending: "loader",
+  verifying: "eye",
+  done: "check",
+  cancelled: "x",
+};
 
 function isTerminal(status: StatusDecision): boolean {
   return status === "done" || status === "cancelled";
@@ -38,8 +47,8 @@ export class SectionConfirmModal extends Modal {
     this.onComplete = onComplete;
   }
 
-  /** Render one row of status radios for a section or subtask. */
-  private renderRadioGroup(
+  /** Render one row of status radios (with icons and hover tooltips). */
+  private renderStatusRadios(
     container: HTMLElement,
     title: string,
     initial: StatusDecision,
@@ -50,6 +59,8 @@ export class SectionConfirmModal extends Modal {
     const optionsDiv = container.createDiv({ cls: "section-status-options" });
     for (const value of STATUS_VALUES) {
       const labelEl = optionsDiv.createEl("label", { cls: "status-option" });
+      const iconEl = labelEl.createSpan({ cls: `status-icon status-icon-${value}` });
+      setIcon(iconEl, STATUS_ICONS[value]);
       const input = labelEl.createEl("input", {
         type: "radio",
         value,
@@ -61,7 +72,28 @@ export class SectionConfirmModal extends Modal {
         onChange?.(value);
       });
       labelEl.createSpan({ text: t(`status.${value}`) });
+      setTooltip(labelEl, t(`tip.${value}`));
     }
+  }
+
+  /** Render a collapsed-by-default, expandable preview of a section's content. */
+  private renderCollapsible(container: HTMLElement, content: string): void {
+    if (!content) return;
+    const wrap = container.createDiv({ cls: "sc-content-wrap" });
+    const toggle = wrap.createEl("button", { cls: "sc-expand-toggle" });
+    const icon = toggle.createSpan({ cls: "sc-toggle-icon" });
+    setIcon(icon, "chevron-right");
+    const label = toggle.createSpan({ text: t("modal.expand") });
+    const pre = wrap.createEl("pre", { cls: "sc-content is-collapsed" });
+    pre.textContent = content;
+
+    let open = false;
+    toggle.addEventListener("click", () => {
+      open = !open;
+      pre.toggleClass("is-collapsed", !open);
+      setIcon(icon, open ? "chevron-down" : "chevron-right");
+      label.textContent = t(open ? "modal.collapse" : "modal.expand");
+    });
   }
 
   onOpen(): void {
@@ -77,7 +109,14 @@ export class SectionConfirmModal extends Modal {
         cls: "section-confirm-row status-" + info.status,
       });
 
-      row.createDiv({ cls: "section-title", text: "### " + info.title });
+      const header = row.createDiv({ cls: "sc-header" });
+      header.createSpan({ cls: "section-title", text: "### " + info.title });
+      if (info.parentTitle) {
+        header.createSpan({
+          cls: "sc-parent",
+          text: t("modal.inSection", { title: "## " + info.parentTitle }),
+        });
+      }
       row.createDiv({
         cls: "section-progress",
         text: t("modal.progress", {
@@ -85,6 +124,8 @@ export class SectionConfirmModal extends Modal {
           total: info.totalTasks,
         }),
       });
+
+      this.renderCollapsible(row, info.content);
 
       // Subtasks container: visible only while the requirement stays open.
       const subtasksEl = row.createDiv({ cls: "section-confirm-subtasks" });
@@ -101,18 +142,18 @@ export class SectionConfirmModal extends Modal {
             cls: "section-subtask-title",
             text: `#### ${child.title} （${child.completedTasks}/${child.totalTasks}）`,
           });
-          this.renderRadioGroup(childRow, child.title, child.status);
+          this.renderCollapsible(childRow, child.content);
+          this.renderStatusRadios(childRow, child.title, child.status);
         }
       } else {
         subtasksEl.addClass("is-hidden");
       }
 
-      this.renderRadioGroup(row, info.title, info.status, (status) => {
+      this.renderStatusRadios(row, info.title, info.status, (status) => {
         row.className = `section-confirm-row status-${status}`;
-        // Collapse subtasks when the requirement is closed.
         if (isTerminal(status)) {
           subtasksEl.addClass("is-hidden");
-        } else {
+        } else if (info.children.length > 0) {
           subtasksEl.removeClass("is-hidden");
         }
       });

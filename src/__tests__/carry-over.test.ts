@@ -53,6 +53,17 @@ describe("analyzeSectionsForConfirmation", () => {
     expect(reqA.children).toHaveLength(0);
   });
 
+  it("captures the raw content between heading levels for the preview", () => {
+    const info = analyzeSectionsForConfirmation(YESTERDAY);
+    // 需求A owns the "- [x] 任务1" line directly under its heading.
+    expect(info.find((i) => i.title === "需求A")!.content).toContain("- [x] 任务1");
+    // 需求B's own body is empty (its content lives under the #### child).
+    expect(info.find((i) => i.title === "需求B")!.content).toBe("");
+    // The #### child carries its own body.
+    const sub = info.find((i) => i.title === "需求B")!.children[0];
+    expect(sub.content).toContain("- [ ] 未完成");
+  });
+
   it("marks a requirement as needing confirmation only when all tasks are done", () => {
     const info = analyzeSectionsForConfirmation(YESTERDAY);
     expect(info.find((i) => i.title === "需求A")!.needsConfirm).toBe(true);

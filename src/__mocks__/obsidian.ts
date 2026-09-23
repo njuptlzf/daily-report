@@ -8,6 +8,9 @@ export function getLanguage(): string {
   return "en";
 }
 
+export function setIcon(_el: HTMLElement, _name: string): void {}
+export function setTooltip(_el: HTMLElement, _content: string): void {}
+
 export class App {
   vault!: any;
   workspace!: any;
