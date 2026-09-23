@@ -290,9 +290,9 @@ export function extractSectionMarkdown(
 
 /**
  * Update the status marker in a heading.
+ * - "pending": the DEFAULT state -> no marker at all (strips any existing one)
  * - "done": adds strikethrough ~~title~~
- * - "pending": removes strikethrough and adds pending marker
- * - "cancelled": removes strikethrough and adds cancelled marker
+ * - "verifying" / "cancelled": adds an explicit <!-- req-status: ... --> marker
  *
  * @param heading - The original heading text
  * @param newStatus - The new status
@@ -313,8 +313,11 @@ export function updateHeadingStatus(
   if (newStatus === "done") {
     // Add strikethrough to the title
     return cleanHeading.replace(/^(\s*#+\s*)(.+)$/, "$1~~$2~~");
-  } else {
-    // Add status marker for pending/cancelled
-    return `${cleanHeading} <!-- req-status: ${newStatus} -->`;
   }
+  if (newStatus === "pending") {
+    // Default state: leave the heading clean, no marker (unmarked == pending).
+    return cleanHeading;
+  }
+  // verifying / cancelled: write an explicit marker
+  return `${cleanHeading} <!-- req-status: ${newStatus} -->`;
 }

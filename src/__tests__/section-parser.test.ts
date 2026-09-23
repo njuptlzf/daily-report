@@ -266,9 +266,14 @@ describe("updateHeadingStatus", () => {
     expect(updated).toBe("## Section <!-- req-status: cancelled -->");
   });
 
-  it("removes strikethrough when changing from done to pending", () => {
+  it("strips strikethrough and marker when changing to pending (default)", () => {
     const heading = "## ~~Section~~";
     const updated = updateHeadingStatus(heading, "pending");
-    expect(updated).toBe("## Section <!-- req-status: pending -->");
+    expect(updated).toBe("## Section");
+  });
+
+  it("writes an explicit marker for verifying", () => {
+    const updated = updateHeadingStatus("## Section", "verifying");
+    expect(updated).toBe("## Section <!-- req-status: verifying -->");
   });
 });

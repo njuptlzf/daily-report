@@ -93,10 +93,19 @@ describe("applyStatusDecisions", () => {
     expect(updated).not.toContain("~~今日AI~~");
   });
 
-  it("adds a pending marker to a requirement that had none", () => {
+  it("leaves a pending requirement unmarked (pending is the default)", () => {
     const decisions = new Map<string, SectionStatus>([["需求B", "pending"]]);
     const updated = applyStatusDecisions(YESTERDAY, decisions);
-    expect(updated).toContain("### 需求B <!-- req-status: pending -->");
+    const lineB = updated.split("\n").find((l) => l.startsWith("### 需求B"));
+    expect(lineB).toBe("### 需求B"); // no marker written
+  });
+
+  it("strips a legacy pending marker back to a clean heading", () => {
+    // 需求A already carries "<!-- req-status: pending -->" in the fixture.
+    const decisions = new Map<string, SectionStatus>([["需求A", "pending"]]);
+    const updated = applyStatusDecisions(YESTERDAY, decisions);
+    expect(updated).toContain("### 需求A");
+    expect(updated).not.toContain("req-status: pending");
   });
 
   it("returns the original markdown when there are no decisions", () => {
