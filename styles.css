@@ -260,3 +260,68 @@
 .sc-detail-footer .mod-cta {
   margin-top: 10px;
 }
+
+/* Detail popup: the requirement heading is already in the body; hide the title bar */
+.sc-detail-modal .modal-title {
+  display: none;
+}
+
+/* Review-changes popup (second confirm) */
+.modal.sc-review-modal {
+  width: min(680px, 92vw);
+}
+
+.sc-review-summary {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.sc-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.sc-review-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+}
+
+.sc-review-item.is-changed {
+  background: var(--background-modifier-hover);
+  border-left-color: var(--color-accent);
+}
+
+.sc-review-title {
+  font-weight: 600;
+  flex: 1 1 auto;
+}
+
+.sc-review-trans {
+  font-size: 13px;
+  flex: 0 0 auto;
+}
+
+.sc-review-old {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.sc-review-new.status-pending { color: var(--color-yellow); }
+.sc-review-new.status-verifying { color: var(--color-blue); }
+.sc-review-new.status-done { color: var(--color-green); }
+.sc-review-new.status-cancelled { color: var(--color-red); }
+
+.sc-review-effect {
+  color: var(--text-faint);
+  font-size: 12px;
+  width: 100%;
+}

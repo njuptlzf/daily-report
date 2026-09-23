@@ -39,10 +39,13 @@ const STATUS_ICONS: Record<StatusDecision, string> = {
   cancelled: "x",
 };
 
-/** Build the requirement's markdown in document order: # -> ## -> ### -> ####. */
+function isTerminalStatus(status: StatusDecision): boolean {
+  return status === "done" || status === "cancelled";
+}
+
+/** Build the requirement's markdown in document order: ## -> ### -> ####. */
 function orderedContext(info: SectionInfo): string {
   const parts: string[] = [];
-  if (info.rootTitle) parts.push("# " + info.rootTitle);
   if (info.parentTitle) parts.push("## " + info.parentTitle);
   parts.push(info.fullMarkdown);
   return parts.join("\n\n");
@@ -110,6 +113,73 @@ class RequirementDetailModal extends Modal {
       this.onPick(this.chosen);
       this.close();
     });
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
+/** Review popup: shows before -> after status per requirement, second confirm. */
+class ReviewChangesModal extends Modal {
+  constructor(
+    app: App,
+    private sections: SectionInfo[],
+    private decisions: Map<string, StatusDecision>,
+    private onApply: () => void
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    this.modalEl.addClass("sc-review-modal");
+    this.titleEl.setText(t("review.title"));
+    const { contentEl } = this;
+    contentEl.empty();
+
+    const changed = this.sections.filter(
+      (s) => (this.decisions.get(s.title) ?? s.status) !== s.status
+    ).length;
+    contentEl.createDiv({
+      cls: "sc-review-summary",
+      text: t("review.summary", { changed, total: this.sections.length }),
+    });
+
+    const list = contentEl.createDiv({ cls: "sc-review-list" });
+    for (const info of this.sections) {
+      const next = this.decisions.get(info.title) ?? info.status;
+      const isChanged = next !== info.status;
+      const item = list.createDiv({
+        cls: "sc-review-item" + (isChanged ? " is-changed" : ""),
+      });
+      item.createSpan({ cls: "sc-review-title", text: "### " + info.title });
+      const trans = item.createSpan({ cls: "sc-review-trans" });
+      trans.createSpan({ cls: "sc-review-old", text: t(`status.${info.status}`) });
+      trans.createSpan({ cls: "sc-review-arrow", text: " → " });
+      trans.createSpan({
+        cls: "sc-review-new status-" + next,
+        text: t(`status.${next}`),
+      });
+      item.createSpan({
+        cls: "sc-review-effect",
+        text: isTerminalStatus(next) ? t("review.willDrop") : t("review.willCarry"),
+      });
+    }
+
+    new Setting(contentEl)
+      .setName("")
+      .addButton((btn) =>
+        btn.setButtonText(t("review.back")).onClick(() => this.close())
+      )
+      .addButton((btn) =>
+        btn
+          .setButtonText(t("review.apply"))
+          .setCta()
+          .onClick(() => {
+            this.onApply();
+            this.close();
+          })
+      );
   }
 
   onClose(): void {
@@ -193,8 +263,11 @@ export class SectionConfirmModal extends Modal {
       .setName("")
       .addButton((btn) =>
         btn.setButtonText(t("modal.confirm")).setCta().onClick(() => {
-          this.onComplete?.(this.collectDecisions());
-          this.close();
+          const decisions = this.collectDecisions();
+          new ReviewChangesModal(this.app, this.sections, decisions, () => {
+            this.onComplete?.(decisions);
+            this.close();
+          }).open();
         })
       );
 

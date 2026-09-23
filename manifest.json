@@ -1,7 +1,7 @@
 {
   "id": "daily-report",
   "name": "Daily Report",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "minAppVersion": "1.7.0",
   "license": "MIT",
   "description": "Daily notes with dynamic directory paths, template rendering, task carry-over, and section-level confirmation.",
