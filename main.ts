@@ -46,25 +46,32 @@ export default class DailyReportPlugin extends Plugin {
   settings: DailyReportSettings = { ...DEFAULT_SETTINGS };
 
   async onload(): Promise<void> {
-    await this.loadSettings();
+    try {
+      console.log("[daily-report] onload start");
+      await this.loadSettings();
 
-    // Register settings tab
-    this.addSettingTab(new DailyReportSettingTab(this.app, this));
+      // Register settings tab
+      this.addSettingTab(new DailyReportSettingTab(this.app, this));
 
-    // Register commands
-    this.registerCommands();
+      // Register commands
+      this.registerCommands();
 
-    // Add ribbon icon (sidebar icon)
-    this.addRibbonIcon(
-      "file-plus",
-      "创建今日日志",
-      () => {
-        void this.createDailyNote();
-      }
-    );
+      // Add ribbon icon (sidebar icon)
+      this.addRibbonIcon(
+        "file-plus",
+        "创建今日日志",
+        () => {
+          void this.createDailyNote();
+        }
+      );
 
-    // Status notice
-    new Notice("Daily Report 插件已加载");
+      // Status notice
+      new Notice("Daily Report 插件已加载");
+      console.log("[daily-report] onload done");
+    } catch (e) {
+      console.error("[daily-report] onload failed:", e);
+      throw e;
+    }
   }
 
   onunload(): void {
