@@ -94,8 +94,6 @@ class RequirementDetailModal extends Modal {
     for (const value of STATUS_VALUES) {
       const labelEl = optionsDiv.createEl("label", { cls: "status-option tip" });
       labelEl.setAttribute("data-tip", t(`tip.${value}`));
-      const iconEl = labelEl.createSpan({ cls: `status-icon status-icon-${value}` });
-      setIcon(iconEl, STATUS_ICONS[value]);
       const input = labelEl.createEl("input", {
         type: "radio",
         value,
@@ -105,6 +103,8 @@ class RequirementDetailModal extends Modal {
       input.addEventListener("change", () => {
         if (input.checked) this.chosen = value;
       });
+      const iconEl = labelEl.createSpan({ cls: `status-icon status-icon-${value}` });
+      setIcon(iconEl, STATUS_ICONS[value]);
       labelEl.createSpan({ text: t(`status.${value}`) });
     }
     const apply = footer.createEl("button", { cls: "mod-cta" });
