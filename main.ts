@@ -24,6 +24,7 @@ import {
   Plugin,
   Notice,
   TFile,
+  Command,
 } from "obsidian";
 import { DateTime } from "luxon";
 import { DailyReportSettings, DEFAULT_SETTINGS } from "./src/settings";
@@ -45,6 +46,8 @@ function errorMessage(e: unknown): string {
 
 export default class DailyReportPlugin extends Plugin {
   settings: DailyReportSettings = { ...DEFAULT_SETTINGS };
+  private createCmd?: Command;
+  private openCmd?: Command;
 
   async onload(): Promise<void> {
     try {
@@ -88,7 +91,7 @@ export default class DailyReportPlugin extends Plugin {
 
   private registerCommands(): void {
     // Command 1: Create daily note
-    this.addCommand({
+    this.createCmd = this.addCommand({
       id: "create-daily-note",
       name: t("cmd.create.name"),
       callback: async () => {
@@ -97,13 +100,22 @@ export default class DailyReportPlugin extends Plugin {
     });
 
     // Command 2: Open daily note
-    this.addCommand({
+    this.openCmd = this.addCommand({
       id: "open-daily-note",
       name: t("cmd.open.name"),
       callback: async () => {
         await this.openDailyNote();
       },
     });
+  }
+
+  /**
+   * Re-apply localized names to the registered commands after a language
+   * change, so the command palette reflects it without a reload.
+   */
+  refreshCommandNames(): void {
+    if (this.createCmd) this.createCmd.name = t("cmd.create.name");
+    if (this.openCmd) this.openCmd.name = t("cmd.open.name");
   }
 
   /**

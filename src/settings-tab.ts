@@ -103,6 +103,7 @@ export class DailyReportSettingTab extends PluginSettingTab {
             this.plugin.settings.language = value as LanguageSetting;
             await this.plugin.saveSettings();
             setLocale(this.plugin.settings.language);
+            this.plugin.refreshCommandNames();
             this.display();
           })
       );
