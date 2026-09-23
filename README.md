@@ -7,6 +7,10 @@ An Obsidian plugin that extends the native Daily Notes plugin with:
 - **Task carry-over** - Automatically carry over incomplete tasks from yesterday
 - **Section-level confirmation** - Confirm whether requirements are closed even when all tasks are done
 
+<img width="582" height="756" alt="image" src="https://github.com/user-attachments/assets/6bdec51f-50e8-40c2-827a-e3635ce4548b" />
+
+<img width="739" height="770" alt="image" src="https://github.com/user-attachments/assets/cd95adc0-a6e9-4e56-8b7a-d95f4888c9c3" />
+
 ## Installation
 
 1. Copy the `obsidian-daily-report` folder to your vault's `.obsidian/plugins/` directory
