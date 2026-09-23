@@ -183,32 +183,13 @@
 .status-icon-done { color: var(--color-green); }
 .status-icon-cancelled { color: var(--color-red); }
 
-/* Instant CSS tooltip on hover */
-.status-option.tip::after {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--background-inverse);
-  color: var(--text-on-accent);
-  padding: 6px 10px;
-  border-radius: 6px;
+/* Always-visible status explanation line in the detail footer */
+.sc-detail-tip {
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.4;
-  width: max-content;
-  max-width: 260px;
-  white-space: normal;
-  text-align: left;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  z-index: 1000;
-}
-
-.status-option.tip:hover::after {
-  opacity: 1;
-  visibility: visible;
+  min-height: 32px;
+  margin-bottom: 8px;
 }
 
 /* Detail popup: scrollable rendered content + pinned status footer */
@@ -301,6 +282,16 @@
 .sc-review-item.is-changed {
   background: var(--background-modifier-hover);
   border-left-color: var(--color-accent);
+}
+
+.sc-review-item.is-unchanged {
+  opacity: 0.55;
+}
+
+.sc-review-same {
+  color: var(--text-muted);
+  font-size: 13px;
+  flex: 0 0 auto;
 }
 
 .sc-review-title {

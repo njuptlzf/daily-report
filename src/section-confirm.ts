@@ -89,11 +89,17 @@ class RequirementDetailModal extends Modal {
       cls: "sc-detail-footer-label",
       text: t("modal.pickStatus"),
     });
+    // Always-visible explanation line (no clipped hover bubble).
+    const tipLine = footer.createDiv({ cls: "sc-detail-tip" });
+    const showTip = (status: StatusDecision) => {
+      tipLine.textContent = t(`tip.${status}`);
+    };
+    showTip(this.chosen);
+
     const optionsDiv = footer.createDiv({ cls: "section-status-options" });
     const groupName = "sc-status-" + Math.random().toString(36).slice(2);
     for (const value of STATUS_VALUES) {
-      const labelEl = optionsDiv.createEl("label", { cls: "status-option tip" });
-      labelEl.setAttribute("data-tip", t(`tip.${value}`));
+      const labelEl = optionsDiv.createEl("label", { cls: "status-option" });
       const input = labelEl.createEl("input", {
         type: "radio",
         value,
@@ -101,11 +107,15 @@ class RequirementDetailModal extends Modal {
       input.name = groupName;
       input.checked = value === this.chosen;
       input.addEventListener("change", () => {
-        if (input.checked) this.chosen = value;
+        if (!input.checked) return;
+        this.chosen = value;
+        showTip(value);
       });
       const iconEl = labelEl.createSpan({ cls: `status-icon status-icon-${value}` });
       setIcon(iconEl, STATUS_ICONS[value]);
       labelEl.createSpan({ text: t(`status.${value}`) });
+      labelEl.addEventListener("mouseenter", () => showTip(value));
+      labelEl.addEventListener("mouseleave", () => showTip(this.chosen));
     }
     const apply = footer.createEl("button", { cls: "mod-cta" });
     apply.setText(t("modal.apply"));
@@ -150,20 +160,31 @@ class ReviewChangesModal extends Modal {
       const next = this.decisions.get(info.title) ?? info.status;
       const isChanged = next !== info.status;
       const item = list.createDiv({
-        cls: "sc-review-item" + (isChanged ? " is-changed" : ""),
+        cls: "sc-review-item" + (isChanged ? " is-changed" : " is-unchanged"),
       });
       item.createSpan({ cls: "sc-review-title", text: "### " + info.title });
-      const trans = item.createSpan({ cls: "sc-review-trans" });
-      trans.createSpan({ cls: "sc-review-old", text: t(`status.${info.status}`) });
-      trans.createSpan({ cls: "sc-review-arrow", text: " → " });
-      trans.createSpan({
-        cls: "sc-review-new status-" + next,
-        text: t(`status.${next}`),
-      });
-      item.createSpan({
-        cls: "sc-review-effect",
-        text: isTerminalStatus(next) ? t("review.willDrop") : t("review.willCarry"),
-      });
+
+      if (isChanged) {
+        const trans = item.createSpan({ cls: "sc-review-trans" });
+        trans.createSpan({ cls: "sc-review-old", text: t(`status.${info.status}`) });
+        trans.createSpan({ cls: "sc-review-arrow", text: " → " });
+        trans.createSpan({
+          cls: "sc-review-new status-" + next,
+          text: t(`status.${next}`),
+        });
+        item.createSpan({
+          cls: "sc-review-effect",
+          text: isTerminalStatus(next)
+            ? t("review.willDrop")
+            : t("review.willCarry"),
+        });
+      } else {
+        // Unchanged: de-emphasized, no arrow, no highlight.
+        item.createSpan({
+          cls: "sc-review-same",
+          text: t(`status.${next}`),
+        });
+      }
     }
 
     new Setting(contentEl)
