@@ -172,6 +172,12 @@ export class DailyReportSettingTab extends PluginSettingTab {
           .setPlaceholder(DEFAULT_SETTINGS.templatePath)
           .setValue(this.plugin.settings.templatePath)
           .onChange(async (value) => {
+            if (!value.trim()) {
+              // Empty template path is allowed: the template is simply unused.
+              this.plugin.settings.templatePath = "";
+              await this.plugin.saveSettings();
+              return;
+            }
             const error = validateTemplateFile(this.app, value);
             if (error) {
               new Notice(error, 5000);

@@ -25,6 +25,12 @@ import { t } from "./i18n";
 
 export type StatusDecision = "pending" | "verifying" | "done" | "cancelled";
 
+/** Outcome of the confirmation dialog. */
+export type ConfirmResult =
+  | { mode: "rollover"; decisions: Map<string, StatusDecision> }
+  | { mode: "template" }
+  | { mode: "cancel" };
+
 const STATUS_VALUES: StatusDecision[] = [
   "pending",
   "verifying",
@@ -209,7 +215,7 @@ class ReviewChangesModal extends Modal {
 }
 
 export class SectionConfirmModal extends Modal {
-  private onComplete: ((decisions: Map<string, StatusDecision>) => void) | null;
+  private onComplete: ((result: ConfirmResult) => void) | null;
   /** title -> the currently selected status for that requirement */
   private selected = new Map<string, StatusDecision>();
 
@@ -217,7 +223,8 @@ export class SectionConfirmModal extends Modal {
     app: App,
     private sections: SectionInfo[],
     private component: Component,
-    onComplete: (decisions: Map<string, StatusDecision>) => void
+    private hasTemplate: boolean,
+    onComplete: (result: ConfirmResult) => void
   ) {
     super(app);
     this.onComplete = onComplete;
@@ -286,7 +293,7 @@ export class SectionConfirmModal extends Modal {
         btn.setButtonText(t("modal.confirm")).setCta().onClick(() => {
           const decisions = this.collectDecisions();
           new ReviewChangesModal(this.app, this.sections, decisions, () => {
-            this.onComplete?.(decisions);
+            this.onComplete?.({ mode: "rollover", decisions });
             this.close();
           }).open();
         })
@@ -296,18 +303,28 @@ export class SectionConfirmModal extends Modal {
       .setName("")
       .addButton((btn) =>
         btn.setButtonText(t("modal.skip")).onClick(() => {
-          // Skip = carry over as-is: pass NO decisions, so existing markers
-          // (verifying / done / cancelled) are preserved and nothing is stripped.
-          this.onComplete?.(new Map());
+          // Skip = carry over as-is: no decisions, so existing markers are
+          // preserved and nothing is stripped.
+          this.onComplete?.({ mode: "rollover", decisions: new Map() });
           this.close();
         })
       );
 
     new Setting(contentEl)
       .setName("")
+      .addButton((btn) => {
+        btn.setButtonText(t("modal.useTemplate")).onClick(() => {
+          this.onComplete?.({ mode: "template" });
+          this.close();
+        });
+        if (!this.hasTemplate) btn.setDisabled(true);
+      });
+
+    new Setting(contentEl)
+      .setName("")
       .addButton((btn) =>
         btn.setButtonText(t("modal.cancel")).onClick(() => {
-          this.onComplete = null;
+          this.onComplete?.({ mode: "cancel" });
           this.close();
         })
       );

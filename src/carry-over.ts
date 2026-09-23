@@ -2,16 +2,17 @@
  * Task carry-over logic.
  *
  * Template hierarchy:
- *   #   / ##   -> fixed skeleton, never carried, never marked
+ *   #   / ##   -> fixed skeleton, never marked
  *   ###        -> requirement, the unit of carry-over and confirmation
- *   ####       -> subtask, only asked when its ### is not terminal
+ *   ####       -> subtask, belongs to its ### requirement
  *
- * When creating today's note, this module:
- *   1. Parses yesterday's note into ### requirements (with their #### children)
- *   2. Applies the user's status decisions
- *   3. Carries non-terminal requirements (and their non-terminal subtasks) into
- *      today's note, under the matching fixed ## section
- *   4. Writes status markers back into yesterday's note (### and #### only)
+ * Two modes when creating today's note:
+ *   - There IS a previous day's note: today = a rollover of yesterday's note
+ *     with closed (done/cancelled) requirements removed and the user's status
+ *     decisions applied. The template is NOT merged in this case.
+ *   - There is NO previous note (first day): today = the template (if set).
+ *
+ * Status markers are written back into yesterday's note for ### / #### only.
  */
 
 import {
@@ -61,7 +62,7 @@ export interface SectionInfo {
 }
 
 export interface CarryOverResult {
-  /** The merged markdown for today's note */
+  /** The markdown for today's note */
   todayMarkdown: string;
   /** Updated markdown for yesterday's note (with status markers) */
   yesterdayMarkdown: string;
@@ -92,8 +93,7 @@ function countTasks(section: Section): {
 
 /**
  * The raw markdown belonging directly to a section: the lines after its heading
- * up to (but excluding) its first child heading. This is the "content between
- * the heading levels" the confirmation dialog lets the user peek at.
+ * up to (but excluding) its first child heading.
  */
 function ownContent(mdLines: string[], section: Section): string {
   const firstChildStart = section.children.length
@@ -164,115 +164,62 @@ export function analyzeSectionsForConfirmation(
 }
 
 /**
- * Render the markdown block of a carried-over ### requirement: its heading with
- * the effective status marker, its own tasks, and only its non-terminal ####
+ * Recursively render a node for the rollover: keep # / ## skeleton always; for
+ * ### / ####, drop the whole subtree when its effective status is terminal,
+ * otherwise emit its heading (with the updated marker) + own content + kept
  * children. Completed tasks are optionally removed.
  */
-function renderRequirementBlock(
+function renderNode(
   lines: string[],
-  req: Section,
+  node: Section,
   decisions: Map<string, SectionStatus>,
   deleteCompleted: boolean
 ): string[] {
-  const drop = new Set<number>();
-  for (const child of req.children) {
-    if (child.level === 4 && isTerminal(effectiveStatus(child, decisions))) {
-      for (let i = child.lineStart; i <= child.lineEnd; i++) drop.add(i);
-    }
-  }
+  const isRequirement = node.level >= 3;
+  const status = isRequirement ? effectiveStatus(node, decisions) : node.status;
+  if (isRequirement && isTerminal(status)) return []; // drop closed subtree
 
   const out: string[] = [];
-  for (let i = req.lineStart; i <= req.lineEnd; i++) {
-    if (drop.has(i)) continue;
-    let line = lines[i];
+  out.push(
+    isRequirement
+      ? updateHeadingStatus(lines[node.lineStart], status)
+      : lines[node.lineStart]
+  );
 
-    if (i === req.lineStart) {
-      line = updateHeadingStatus(line, effectiveStatus(req, decisions));
-    } else {
-      const child = req.children.find(
-        (c) => c.level === 4 && c.lineStart === i
-      );
-      if (child) line = updateHeadingStatus(line, effectiveStatus(child, decisions));
-    }
-
+  const firstChild = node.children.length
+    ? Math.min(...node.children.map((c) => c.lineStart))
+    : node.lineEnd + 1;
+  for (let i = node.lineStart + 1; i < firstChild; i++) {
+    const line = lines[i];
     if (deleteCompleted && /^\s*- \[[xX]\]/.test(line)) continue;
     out.push(line);
+  }
+
+  for (const child of node.children) {
+    out.push(...renderNode(lines, child, decisions, deleteCompleted));
   }
   return out;
 }
 
 /**
- * Merge yesterday's carried-over requirements into today's template, placing
- * each under the fixed ## section it came from.
+ * Build today's note from yesterday's note: same structure, minus closed
+ * requirements, with the user's decisions applied as markers.
  */
-export function mergeSections(
-  todayTemplateMarkdown: string,
+export function rolloverMarkdown(
   yesterdayMarkdown: string,
   decisions: Map<string, SectionStatus>,
   deleteCompleted: boolean
 ): string {
-  if (!yesterdayMarkdown) return todayTemplateMarkdown;
+  const lines = yesterdayMarkdown.split("\n");
+  const sections = parseSections(yesterdayMarkdown);
 
-  const yLines = yesterdayMarkdown.split("\n");
-  const ySections = parseSections(yesterdayMarkdown);
-
-  const requirements: { req: Section; parent: string }[] = [];
-  function walk(nodes: Section[], parent: string): void {
-    for (const node of nodes) {
-      if (node.level === 3) {
-        if (!isTerminal(effectiveStatus(node, decisions))) {
-          requirements.push({ req: node, parent });
-        }
-      } else {
-        walk(node.children, node.level === 2 ? node.title : parent);
-      }
-    }
+  // Preserve any content before the first heading (e.g. frontmatter).
+  const firstStart = sections.length ? sections[0].lineStart : lines.length;
+  const out: string[] = lines.slice(0, firstStart);
+  for (const node of sections) {
+    out.push(...renderNode(lines, node, decisions, deleteCompleted));
   }
-  walk(ySections, "");
-
-  if (requirements.length === 0) return todayTemplateMarkdown;
-
-  const todayLines = todayTemplateMarkdown.split("\n");
-  const todaySections = parseSections(todayTemplateMarkdown);
-
-  const headingEnd = new Map<string, number>();
-  for (const node of todaySections) {
-    if (node.level === 2) headingEnd.set(node.title, node.lineEnd);
-  }
-
-  interface Insertion {
-    line: number;
-    text: string;
-  }
-  const insertions: Insertion[] = [];
-  const orphans: string[] = [];
-
-  for (const { req, parent } of requirements) {
-    const block = renderRequirementBlock(
-      yLines,
-      req,
-      decisions,
-      deleteCompleted
-    ).join("\n");
-    const end = parent ? headingEnd.get(parent) : undefined;
-    if (end !== undefined) {
-      insertions.push({ line: end + 1, text: block });
-    } else {
-      orphans.push(block);
-    }
-  }
-
-  // Apply from bottom to top so earlier line indices stay valid.
-  insertions.sort((a, b) => b.line - a.line);
-  for (const ins of insertions) {
-    todayLines.splice(ins.line, 0, "", ...ins.text.split("\n"));
-  }
-
-  let result = todayLines.join("\n");
-  if (orphans.length > 0) {
-    result += "\n\n" + orphans.join("\n\n");
-  }
-  return result;
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
 }
 
 /**
@@ -308,11 +255,11 @@ export function applyStatusDecisions(
 /**
  * Full carry-over workflow.
  *
- * @param yesterdayMarkdown - Yesterday's note markdown (or empty string)
- * @param todayTemplateMarkdown - Today's template with rendered date placeholders
+ * @param yesterdayMarkdown - Yesterday's note markdown (empty on the first day)
+ * @param todayTemplateMarkdown - Rendered template (used only when there is no
+ *   previous note, i.e. the first day)
  * @param decisions - User's status decisions (section title -> new status)
  * @param deleteCompleted - Whether to remove completed tasks from carried-over content
- * @returns Carry-over result with both notes' markdown
  */
 export function carryOver(
   yesterdayMarkdown: string,
@@ -321,12 +268,9 @@ export function carryOver(
   deleteCompleted: boolean
 ): CarryOverResult {
   const updatedYesterday = applyStatusDecisions(yesterdayMarkdown, decisions);
-  const todayMarkdown = mergeSections(
-    todayTemplateMarkdown,
-    yesterdayMarkdown,
-    decisions,
-    deleteCompleted
-  );
+  const todayMarkdown = yesterdayMarkdown
+    ? rolloverMarkdown(yesterdayMarkdown, decisions, deleteCompleted)
+    : todayTemplateMarkdown;
 
   return {
     todayMarkdown,

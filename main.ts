@@ -136,21 +136,11 @@ export default class DailyReportPlugin extends Plugin {
       return;
     }
 
-    // Step 1: Read and render template
-    let todayTemplateMarkdown = "";
-    try {
-      todayTemplateMarkdown = await this.readTemplate();
-    } catch (e: unknown) {
-      new Notice(t("error.readTemplate", { msg: errorMessage(e) }));
-      todayTemplateMarkdown = "";
-    }
-
-    // Step 2: Read yesterday's note
+    // Read yesterday's note (if any)
     const yesterday = today.minus({ days: 1 });
     const yesterdayPath = this.computePath(yesterday);
     let yesterdayMarkdown = "";
     let yesterdayFile: TFile | null = null;
-
     try {
       yesterdayFile = this.findFile(yesterdayPath);
       if (yesterdayFile) {
@@ -161,56 +151,61 @@ export default class DailyReportPlugin extends Plugin {
       yesterdayMarkdown = "";
     }
 
-    // Step 3: Section confirmation (if enabled and yesterday has sections)
-    const decisions = new Map<string, SectionStatus>();
+    const hasTemplate = !!this.settings.templatePath.trim();
 
-    if (
-      this.settings.confirmBeforeCreate &&
-      yesterdayMarkdown &&
-      yesterdayMarkdown.length > 0
-    ) {
-      const requirements = analyzeSectionsForConfirmation(
-        yesterdayMarkdown
-      );
+    // Decide today's content and whether to write back to yesterday.
+    let todayMarkdown = "";
+    let updatedYesterday = yesterdayMarkdown;
+    let writeBack = false;
 
-      if (requirements.length > 0) {
-        const userDecisions = await this.showConfirmationModal(
-          requirements
-        );
-        if (userDecisions) {
-          for (const [title, status] of userDecisions) {
-            decisions.set(title, status);
-          }
+    if (yesterdayMarkdown) {
+      // Carry-over day.
+      let mode: "rollover" | "template" = "rollover";
+      let decisions = new Map<string, SectionStatus>();
+
+      if (this.settings.confirmBeforeCreate) {
+        const requirements = analyzeSectionsForConfirmation(yesterdayMarkdown);
+        if (requirements.length > 0) {
+          const res = await this.showConfirmationModal(requirements, hasTemplate);
+          if (res.mode === "cancel") return;
+          if (res.mode === "template") mode = "template";
+          else decisions = res.decisions;
         }
       }
+
+      if (mode === "template" && hasTemplate) {
+        // Start from template: today = template, yesterday left untouched.
+        todayMarkdown = await this.renderTemplateOrEmpty();
+      } else {
+        const result = carryOver(
+          yesterdayMarkdown,
+          "",
+          decisions,
+          this.settings.deleteCompletedTasks
+        );
+        todayMarkdown = result.todayMarkdown;
+        updatedYesterday = result.yesterdayMarkdown;
+        writeBack = decisions.size > 0;
+      }
+    } else {
+      // First day: use the template (empty file if none set).
+      todayMarkdown = hasTemplate ? await this.renderTemplateOrEmpty() : "";
     }
 
-    // Step 4: Carry over pending sections
-    const result = carryOver(
-      yesterdayMarkdown,
-      todayTemplateMarkdown,
-      decisions,
-      this.settings.deleteCompletedTasks
-    );
-
-    // Step 5: Save today's note
+    // Save today's note
     try {
-      const newFile = await this.createFile(
-        `${todayPath}.md`,
-        result.todayMarkdown
-      );
+      const newFile = await this.createFile(`${todayPath}.md`, todayMarkdown);
       new Notice(t("notice.created"));
       await this.openFile(newFile);
     } catch (e: unknown) {
       new Notice(t("error.createNote", { msg: errorMessage(e) }));
+      return;
     }
 
-    // Step 6: Save yesterday's note with updated statuses
-    if (yesterdayFile && result.appliedStatuses.size > 0) {
+    // Write status markers back to yesterday (rollover mode only)
+    if (writeBack && yesterdayFile) {
       try {
-        await this.app.vault.process(yesterdayFile, () => {
-          return result.yesterdayMarkdown;
-        });
+        await this.app.vault.process(yesterdayFile, () => updatedYesterday);
         new Notice(t("notice.statusUpdated"));
       } catch (e: unknown) {
         new Notice(t("error.updateYesterday", { msg: errorMessage(e) }));
@@ -268,6 +263,16 @@ export default class DailyReportPlugin extends Plugin {
     const rendered = renderTemplate(rawTemplate, DateTime.now());
 
     return rendered;
+  }
+
+  /** Render the template, or return "" (with a notice) if it can't be read. */
+  private async renderTemplateOrEmpty(): Promise<string> {
+    try {
+      return await this.readTemplate();
+    } catch (e: unknown) {
+      new Notice(t("error.readTemplate", { msg: errorMessage(e) }));
+      return "";
+    }
   }
 
   /**
@@ -331,15 +336,20 @@ export default class DailyReportPlugin extends Plugin {
   }
 
   /**
-   * Show the section confirmation modal and return user decisions.
+   * Show the section confirmation modal and return the user's outcome.
    */
   async showConfirmationModal(
-    sections: import("./src/carry-over").SectionInfo[]
-  ): Promise<Map<string, SectionStatus> | null> {
+    sections: import("./src/carry-over").SectionInfo[],
+    hasTemplate: boolean
+  ): Promise<import("./src/section-confirm").ConfirmResult> {
     return new Promise((resolve) => {
-      const modal = new SectionConfirmModal(this.app, sections, this, (decisions) => {
-        resolve(decisions);
-      });
+      const modal = new SectionConfirmModal(
+        this.app,
+        sections,
+        this,
+        hasTemplate,
+        (result) => resolve(result)
+      );
       modal.open();
     });
   }

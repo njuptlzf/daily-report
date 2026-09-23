@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   analyzeSectionsForConfirmation,
-  mergeSections,
+  rolloverMarkdown,
   applyStatusDecisions,
   carryOver,
 } from "../carry-over";
@@ -113,71 +113,64 @@ describe("applyStatusDecisions", () => {
   });
 });
 
-describe("mergeSections", () => {
-  const TEMPLATE = ["# 今日", "", "## 今日AI", "", "### placeholder"].join("\n");
-
-  it("carries open requirements under their matching fixed ## section", () => {
-    const decisions = new Map<string, SectionStatus>([
-      ["需求A", "pending"],
-      ["需求B", "pending"],
-    ]);
-    const merged = mergeSections(TEMPLATE, YESTERDAY, decisions, false);
-    // Both requirements appear after the 今日AI heading and before 其他 content.
-    const aiIndex = merged.indexOf("## 今日AI");
-    const aIndex = merged.indexOf("### 需求A");
-    const bIndex = merged.indexOf("### 需求B");
-    expect(aIndex).toBeGreaterThan(aiIndex);
-    expect(bIndex).toBeGreaterThan(aiIndex);
+describe("rolloverMarkdown", () => {
+  it("keeps the # / ## skeleton and open requirements, drops closed ones", () => {
+    const out = rolloverMarkdown(YESTERDAY, new Map(), false);
+    expect(out).toContain("# 日报");
+    expect(out).toContain("## 今日AI");
+    expect(out).toContain("### 需求A");
+    expect(out).toContain("### 需求B");
+    expect(out).toContain("#### 子任务B1");
+    // 需求C is done -> not carried
+    expect(out).not.toContain("需求C");
   });
 
-  it("does not carry a requirement the user closed", () => {
-    const decisions = new Map<string, SectionStatus>([
-      ["需求A", "done"],
-      ["需求B", "pending"],
-    ]);
-    const merged = mergeSections(TEMPLATE, YESTERDAY, decisions, false);
-    expect(merged).not.toContain("### 需求A");
-    expect(merged).toContain("### 需求B");
+  it("drops a requirement the user closed", () => {
+    const decisions = new Map<string, SectionStatus>([["需求A", "done"]]);
+    const out = rolloverMarkdown(YESTERDAY, decisions, false);
+    expect(out).not.toContain("### 需求A");
+    expect(out).toContain("### 需求B");
   });
 
-  it("drops a #### subtask the user closed but keeps its siblings", () => {
+  it("drops a #### subtask the user closed but keeps its parent", () => {
     const decisions = new Map<string, SectionStatus>([
       ["需求B", "pending"],
       ["子任务B1", "cancelled"],
     ]);
-    const merged = mergeSections(TEMPLATE, YESTERDAY, decisions, false);
-    expect(merged).toContain("### 需求B");
-    expect(merged).not.toContain("#### 子任务B1");
+    const out = rolloverMarkdown(YESTERDAY, decisions, false);
+    expect(out).toContain("### 需求B");
+    expect(out).not.toContain("#### 子任务B1");
   });
 
   it("removes completed tasks when deleteCompleted is true", () => {
-    const decisions = new Map<string, SectionStatus>([["需求A", "pending"]]);
-    const merged = mergeSections(TEMPLATE, YESTERDAY, decisions, true);
-    expect(merged).not.toContain("- [x] 任务1");
+    const out = rolloverMarkdown(YESTERDAY, new Map(), true);
+    expect(out).not.toContain("- [x] 任务1");
+    expect(out).toContain("- [ ] 未完成");
   });
 });
 
 describe("carryOver", () => {
-  it("produces both notes and records applied statuses", () => {
+  it("rollover mode: drops closed requirement today, writes marker to yesterday", () => {
     const decisions = new Map<string, SectionStatus>([["需求A", "done"]]);
-    const result = carryOver(YESTERDAY, "# 今日\n", decisions, false);
+    const result = carryOver(YESTERDAY, "", decisions, false);
     expect(result.appliedStatuses.get("需求A")).toBe("done");
+    // Today (rollover) drops the now-closed 需求A.
+    expect(result.todayMarkdown).not.toContain("### 需求A");
+    // Yesterday gets the done marker.
     expect(result.yesterdayMarkdown).toContain("### ~~需求A~~");
   });
 
-  it("Skip (no decisions) preserves an existing verifying marker, changes nothing", () => {
+  it("Skip (no decisions) preserves a verifying marker and leaves yesterday untouched", () => {
     const yesterday =
       "## 今日AI\n\n### 需求V <!-- req-status: verifying -->\n- [x] 做完";
-    const result = carryOver(yesterday, "# 今日\n\n## 今日AI\n", new Map(), false);
-    // Yesterday is left untouched (no marker stripped).
+    const result = carryOver(yesterday, "", new Map(), false);
     expect(result.yesterdayMarkdown).toBe(yesterday);
-    // Today's carried block keeps the verifying marker.
     expect(result.todayMarkdown).toContain(
       "### 需求V <!-- req-status: verifying -->"
     );
   });
 
-  it("handles empty yesterday markdown", () => {
+  it("first day (no yesterday) uses the template", () => {
     const result = carryOver("", "# Today", new Map(), false);
     expect(result.todayMarkdown).toBe("# Today");
   });
