@@ -336,7 +336,7 @@ export default class DailyReportPlugin extends Plugin {
     sections: import("./src/carry-over").SectionInfo[]
   ): Promise<Map<string, SectionStatus> | null> {
     return new Promise((resolve) => {
-      const modal = new SectionConfirmModal(this.app, sections, (decisions) => {
+      const modal = new SectionConfirmModal(this.app, sections, this, (decisions) => {
         resolve(decisions);
       });
       modal.open();

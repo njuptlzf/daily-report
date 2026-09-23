@@ -62,6 +62,8 @@ describe("analyzeSectionsForConfirmation", () => {
     // The #### child carries its own body.
     const sub = info.find((i) => i.title === "需求B")!.children[0];
     expect(sub.content).toContain("- [ ] 未完成");
+    // The requirement's full block (detail popup source) includes its #### child.
+    expect(info.find((i) => i.title === "需求B")!.fullMarkdown).toContain("#### 子任务B1");
   });
 
   it("marks a requirement as needing confirmation only when all tasks are done", () => {

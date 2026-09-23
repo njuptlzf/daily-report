@@ -1,15 +1,22 @@
 /**
  * Section status confirmation modal.
  *
- * When creating a daily note, yesterday's ### requirements that are still open
- * are presented for a status decision. Each requirement shows its raw content
- * (collapsed by default, expandable) so the user can see what they are deciding
- * about. Status options carry icons and hover tooltips that explain exactly how
- * the section flows after the choice (matching the help doc). A requirement's
- * #### subtasks are shown only while the requirement stays open.
+ * The main modal lists yesterday's open ### requirements as collapsed rows
+ * ("> ### title"). Clicking a row opens a detail popup that renders the
+ * requirement's full original markdown (### + body + #### children, styled),
+ * with the carry-over status pinned at the bottom so it stays visible while the
+ * content scrolls. Status is single-select; each option shows an instant CSS
+ * tooltip explaining how the section flows after the choice.
  */
 
-import { App, Modal, Setting, setIcon, setTooltip } from "obsidian";
+import {
+  App,
+  Component,
+  MarkdownRenderer,
+  Modal,
+  Setting,
+  setIcon,
+} from "obsidian";
 import { SectionInfo } from "./carry-over";
 import { t } from "./i18n";
 
@@ -29,71 +36,95 @@ const STATUS_ICONS: Record<StatusDecision, string> = {
   cancelled: "x",
 };
 
-function isTerminal(status: StatusDecision): boolean {
-  return status === "done" || status === "cancelled";
-}
-
-export class SectionConfirmModal extends Modal {
-  private onComplete: ((decisions: Map<string, StatusDecision>) => void) | null;
-  /** title -> the currently selected status for that row */
-  private selected = new Map<string, StatusDecision>();
+/** Detail popup: rendered requirement content + pinned single-select status. */
+class RequirementDetailModal extends Modal {
+  private chosen: StatusDecision;
 
   constructor(
     app: App,
-    private sections: SectionInfo[],
-    onComplete: (decisions: Map<string, StatusDecision>) => void
+    private info: SectionInfo,
+    private component: Component,
+    initial: StatusDecision,
+    private onPick: (status: StatusDecision) => void
   ) {
     super(app);
-    this.onComplete = onComplete;
+    this.chosen = initial;
   }
 
-  /** Render one row of status radios (with icons and hover tooltips). */
-  private renderStatusRadios(
-    container: HTMLElement,
-    title: string,
-    initial: StatusDecision,
-    onChange?: (status: StatusDecision) => void
-  ): void {
-    this.selected.set(title, initial);
+  onOpen(): void {
+    this.modalEl.addClass("sc-detail-modal");
+    const { contentEl } = this;
+    contentEl.empty();
 
-    const optionsDiv = container.createDiv({ cls: "section-status-options" });
+    this.titleEl.setText("### " + this.info.title);
+
+    // Scrollable rendered original content.
+    const body = contentEl.createDiv({ cls: "sc-detail-body" });
+    if (this.info.parentTitle) {
+      body.createDiv({
+        cls: "sc-detail-parent",
+        text: "## " + this.info.parentTitle,
+      });
+    }
+    const md = body.createDiv({ cls: "sc-detail-md" });
+    void MarkdownRenderer.render(
+      this.app,
+      this.info.fullMarkdown,
+      md,
+      "",
+      this.component
+    );
+
+    // Pinned footer: single-select status + apply.
+    const footer = contentEl.createDiv({ cls: "sc-detail-footer" });
+    footer.createDiv({
+      cls: "sc-detail-footer-label",
+      text: t("modal.pickStatus"),
+    });
+    const optionsDiv = footer.createDiv({ cls: "section-status-options" });
+    const groupName = "sc-status-" + Math.random().toString(36).slice(2);
     for (const value of STATUS_VALUES) {
-      const labelEl = optionsDiv.createEl("label", { cls: "status-option" });
+      const labelEl = optionsDiv.createEl("label", { cls: "status-option tip" });
+      labelEl.setAttribute("data-tip", t(`tip.${value}`));
       const iconEl = labelEl.createSpan({ cls: `status-icon status-icon-${value}` });
       setIcon(iconEl, STATUS_ICONS[value]);
       const input = labelEl.createEl("input", {
         type: "radio",
         value,
       }) as HTMLInputElement;
-      input.checked = value === initial;
+      input.name = groupName;
+      input.checked = value === this.chosen;
       input.addEventListener("change", () => {
-        if (!input.checked) return;
-        this.selected.set(title, value);
-        onChange?.(value);
+        if (input.checked) this.chosen = value;
       });
       labelEl.createSpan({ text: t(`status.${value}`) });
-      setTooltip(labelEl, t(`tip.${value}`));
     }
+    const apply = footer.createEl("button", { cls: "mod-cta" });
+    apply.setText(t("modal.apply"));
+    apply.addEventListener("click", () => {
+      this.onPick(this.chosen);
+      this.close();
+    });
   }
 
-  /** Render a collapsed-by-default, expandable preview of a section's content. */
-  private renderCollapsible(container: HTMLElement, content: string): void {
-    if (!content) return;
-    const wrap = container.createDiv({ cls: "sc-content-wrap" });
-    const toggle = wrap.createEl("button", { cls: "sc-expand-toggle" });
-    const icon = toggle.createSpan({ cls: "sc-toggle-icon" });
-    setIcon(icon, "chevron-right");
-    const label = toggle.createSpan({ text: t("modal.expand") });
-    const pre = wrap.createEl("pre", { cls: "sc-content is-collapsed" });
-    pre.textContent = content;
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
 
-    let open = false;
-    toggle.addEventListener("click", () => {
-      open = !open;
-      pre.toggleClass("is-collapsed", !open);
-      setIcon(icon, open ? "chevron-down" : "chevron-right");
-      label.textContent = t(open ? "modal.collapse" : "modal.expand");
-    });
+export class SectionConfirmModal extends Modal {
+  private onComplete: ((decisions: Map<string, StatusDecision>) => void) | null;
+  /** title -> the currently selected status for that requirement */
+  private selected = new Map<string, StatusDecision>();
+
+  constructor(
+    app: App,
+    private sections: SectionInfo[],
+    private component: Component,
+    onComplete: (decisions: Map<string, StatusDecision>) => void
+  ) {
+    super(app);
+    this.onComplete = onComplete;
   }
 
   onOpen(): void {
@@ -101,61 +132,40 @@ export class SectionConfirmModal extends Modal {
 
     titleEl.setText(t("modal.title"));
     modalEl.addClass("section-confirm-modal");
-
     contentEl.createEl("p", { text: t("modal.intro") });
 
     for (const info of this.sections) {
+      this.selected.set(info.title, info.status);
+
       const row = contentEl.createDiv({
         cls: "section-confirm-row status-" + info.status,
       });
-
-      const header = row.createDiv({ cls: "sc-header" });
+      const header = row.createDiv({ cls: "sc-row-header" });
+      const chev = header.createSpan({ cls: "sc-chevron" });
+      setIcon(chev, "chevron-right");
       header.createSpan({ cls: "section-title", text: "### " + info.title });
-      if (info.parentTitle) {
-        header.createSpan({
-          cls: "sc-parent",
-          text: t("modal.inSection", { title: "## " + info.parentTitle }),
-        });
-      }
-      row.createDiv({
-        cls: "section-progress",
-        text: t("modal.progress", {
-          done: info.completedTasks,
-          total: info.totalTasks,
-        }),
+      const chip = header.createSpan({
+        cls: "sc-chip status-" + info.status,
+        text: t(`status.${info.status}`),
+      });
+      header.createSpan({
+        cls: "sc-progress",
+        text: `${info.completedTasks}/${info.totalTasks}`,
       });
 
-      this.renderCollapsible(row, info.content);
-
-      // Subtasks container: visible only while the requirement stays open.
-      const subtasksEl = row.createDiv({ cls: "section-confirm-subtasks" });
-      if (info.children.length > 0) {
-        subtasksEl.createDiv({
-          cls: "section-subtasks-label",
-          text: t("modal.subtasksLabel"),
-        });
-        for (const child of info.children) {
-          const childRow = subtasksEl.createDiv({
-            cls: "section-confirm-subtask",
-          });
-          childRow.createDiv({
-            cls: "section-subtask-title",
-            text: `#### ${child.title} （${child.completedTasks}/${child.totalTasks}）`,
-          });
-          this.renderCollapsible(childRow, child.content);
-          this.renderStatusRadios(childRow, child.title, child.status);
-        }
-      } else {
-        subtasksEl.addClass("is-hidden");
-      }
-
-      this.renderStatusRadios(row, info.title, info.status, (status) => {
-        row.className = `section-confirm-row status-${status}`;
-        if (isTerminal(status)) {
-          subtasksEl.addClass("is-hidden");
-        } else if (info.children.length > 0) {
-          subtasksEl.removeClass("is-hidden");
-        }
+      row.addEventListener("click", () => {
+        new RequirementDetailModal(
+          this.app,
+          info,
+          this.component,
+          this.selected.get(info.title) ?? info.status,
+          (status) => {
+            this.selected.set(info.title, status);
+            chip.textContent = t(`status.${status}`);
+            chip.className = "sc-chip status-" + status;
+            row.className = "section-confirm-row status-" + status;
+          }
+        ).open();
       });
     }
 
@@ -174,9 +184,6 @@ export class SectionConfirmModal extends Modal {
         btn.setButtonText(t("modal.skip")).onClick(() => {
           for (const info of this.sections) {
             this.selected.set(info.title, "pending");
-            for (const child of info.children) {
-              this.selected.set(child.title, "pending");
-            }
           }
           this.onComplete?.(this.collectDecisions());
           this.close();
@@ -193,24 +200,11 @@ export class SectionConfirmModal extends Modal {
       );
   }
 
-  /**
-   * Build the decision map. A closed requirement contributes only its own
-   * status; its subtasks are ignored. An open requirement contributes its
-   * status plus each subtask's status.
-   */
+  /** One decision per ### requirement; #### subtasks follow their note status. */
   private collectDecisions(): Map<string, StatusDecision> {
     const decisions = new Map<string, StatusDecision>();
     for (const info of this.sections) {
-      const status = this.selected.get(info.title) ?? info.status;
-      decisions.set(info.title, status);
-      if (!isTerminal(status)) {
-        for (const child of info.children) {
-          decisions.set(
-            child.title,
-            this.selected.get(child.title) ?? child.status
-          );
-        }
-      }
+      decisions.set(info.title, this.selected.get(info.title) ?? info.status);
     }
     return decisions;
   }

@@ -67,97 +67,85 @@
   font-size: 12px;
 }
 
+/* Confirmation list rows (clickable to open the detail popup) */
 .section-confirm-row {
   padding: 8px 12px;
   border: 1px solid var(--background-modifier-border);
+  border-left-width: 3px;
   border-radius: 6px;
   margin-bottom: 8px;
-}
-
-.section-confirm-row .section-title {
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.section-confirm-row .section-progress {
-  color: var(--text-muted);
-  font-size: 12px;
-  margin-bottom: 6px;
-}
-
-.section-confirm-row .section-status-options {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.section-confirm-row .status-option {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   cursor: pointer;
 }
 
-.section-confirm-row .status-option input[type="radio"] {
-  margin: 0;
+.section-confirm-row:hover {
+  background: var(--background-modifier-hover);
 }
 
-.section-confirm-row.status-pending {
-  border-left: 3px solid var(--color-yellow);
+.section-confirm-row.status-pending { border-left-color: var(--color-yellow); }
+.section-confirm-row.status-verifying { border-left-color: var(--color-blue); }
+.section-confirm-row.status-done { border-left-color: var(--color-green); }
+.section-confirm-row.status-cancelled { border-left-color: var(--color-red); }
+
+.sc-row-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.section-confirm-row.status-verifying {
-  border-left: 3px solid var(--color-blue);
+.sc-chevron {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex: 0 0 auto;
 }
 
-.section-confirm-row.status-done {
-  border-left: 3px solid var(--color-green);
+.sc-chevron svg { width: 16px; height: 16px; }
+
+.sc-row-header .section-title {
+  font-weight: 600;
+  flex: 1 1 auto;
 }
 
-.section-confirm-row.status-cancelled {
-  border-left: 3px solid var(--color-red);
-}
-
-/* Subtasks are shown only while the parent requirement stays open */
-.section-confirm-subtasks {
-  margin-top: 8px;
-  padding-left: 16px;
-  border-left: 2px dashed var(--background-modifier-border);
-}
-
-.section-confirm-subtasks.is-hidden {
-  display: none;
-}
-
-.section-subtasks-label {
+.sc-progress {
   color: var(--text-muted);
   font-size: 12px;
-  margin-bottom: 4px;
+  flex: 0 0 auto;
 }
 
-.section-confirm-subtask {
-  margin-bottom: 6px;
+.sc-chip {
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--background-modifier-border);
+  flex: 0 0 auto;
 }
 
-.section-subtask-title {
-  font-size: 13px;
-  margin-bottom: 2px;
-}
+.sc-chip.status-pending { color: var(--color-yellow); }
+.sc-chip.status-verifying { color: var(--color-blue); }
+.sc-chip.status-done { color: var(--color-green); }
+.sc-chip.status-cancelled { color: var(--color-red); }
 
-/* Requirement header: title + parent-section label */
-.sc-header {
+/* Status options (used in the detail popup footer) */
+.section-status-options {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  gap: 14px;
+  align-items: center;
   flex-wrap: wrap;
 }
 
-.sc-parent {
-  color: var(--text-faint);
-  font-size: 12px;
+.status-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  position: relative;
 }
 
-/* Status icons */
+.status-option input[type="radio"] {
+  margin: 0;
+}
+
 .status-icon {
   display: inline-flex;
   width: 14px;
@@ -165,64 +153,87 @@
   align-items: center;
 }
 
-.status-icon svg {
-  width: 14px;
-  height: 14px;
-}
+.status-icon svg { width: 14px; height: 14px; }
 
 .status-icon-pending { color: var(--color-yellow); }
 .status-icon-verifying { color: var(--color-blue); }
 .status-icon-done { color: var(--color-green); }
 .status-icon-cancelled { color: var(--color-red); }
 
-/* Collapsible raw-content preview */
-.sc-content-wrap {
-  margin: 4px 0 6px;
+/* Instant CSS tooltip on hover */
+.status-option.tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--background-inverse);
+  color: var(--text-on-accent);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  width: max-content;
+  max-width: 260px;
+  white-space: normal;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.08s;
+  pointer-events: none;
+  z-index: 1000;
 }
 
-.sc-expand-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: transparent;
-  border: none;
-  box-shadow: none;
+.status-option.tip:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Detail popup: scrollable rendered content + pinned status footer */
+.modal.sc-detail-modal {
+  width: min(720px, 92vw);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.sc-detail-modal .modal-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sc-detail-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.sc-detail-parent {
+  color: var(--text-faint);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.sc-detail-md {
+  font-size: var(--font-ui-small);
+  line-height: 1.6;
+}
+
+.sc-detail-footer {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+
+.sc-detail-footer-label {
   color: var(--text-muted);
   font-size: 12px;
-  padding: 0;
-  cursor: pointer;
+  margin-bottom: 6px;
 }
 
-.sc-expand-toggle:hover {
-  color: var(--text-normal);
-  background: transparent;
-}
-
-.sc-toggle-icon {
-  display: inline-flex;
-  width: 14px;
-  height: 14px;
-}
-
-.sc-toggle-icon svg {
-  width: 14px;
-  height: 14px;
-}
-
-.sc-content {
-  background: var(--background-primary-alt);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  padding: 8px 10px;
-  margin-top: 4px;
-  font-family: var(--font-monospace);
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 240px;
-  overflow-y: auto;
-}
-
-.sc-content.is-collapsed {
-  display: none;
+.sc-detail-footer .mod-cta {
+  margin-top: 10px;
 }

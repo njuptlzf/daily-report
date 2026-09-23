@@ -52,6 +52,8 @@ export interface SectionInfo {
   status: SectionStatus;
   /** Raw markdown body between the ### heading and its first #### child */
   content: string;
+  /** Full raw markdown of the requirement block (### heading + body + #### children) */
+  fullMarkdown: string;
   /** Non-terminal #### children, asked only while this ### stays open */
   children: SubtaskInfo[];
 }
@@ -138,6 +140,7 @@ export function analyzeSectionsForConfirmation(
           needsConfirm: needsConfirmation(node),
           status: node.status,
           content: ownContent(mdLines, node),
+          fullMarkdown: mdLines.slice(node.lineStart, node.lineEnd + 1).join("\n"),
           children: node.children
             .filter((ch) => ch.level === 4 && !isTerminal(ch.status))
             .map((ch) => toSubtaskInfo(ch, mdLines)),
