@@ -9,8 +9,8 @@ export function getLanguage(): string {
 }
 
 export class App {
-  vault!: object;
-  workspace!: object;
+  vault!: any;
+  workspace!: any;
 }
 
 export class Plugin {
@@ -37,6 +37,15 @@ export class TFile {
   }
 }
 
+export class TFolder {
+  path: string;
+  name: string;
+  constructor(path: string) {
+    this.path = path;
+    this.name = path.split("/").pop() || path;
+  }
+}
+
 export class Modal {
   contentEl!: HTMLElement;
   titleEl!: HTMLElement;
@@ -49,14 +58,32 @@ export class Modal {
 }
 
 export abstract class SuggestModal<T> {
-  app!: object;
-  limit!: number;
-  emptyStateText!: string;
-  constructor() {}
-  setPlaceholder() {}
-  setInstructions() {}
-  open() {}
-  close() {}
+  app: any;
+  limit = 0;
+  emptyStateText = "";
+  closed = false;
+  inputEl: any = {
+    value: "",
+    addEventListener() {},
+    dispatchEvent() { return true; },
+  };
+  constructor(app: any) {
+    this.app = app;
+  }
+  setPlaceholder(_s: string) {}
+  setInstructions(_i: unknown) {}
+  open() {
+    this.closed = false;
+  }
+  close() {
+    this.closed = true;
+  }
+  // Base behavior: choose then close. Subclasses override to avoid closing
+  // on navigation and delegate here for terminal selections.
+  selectSuggestion(value: T, evt: MouseEvent | KeyboardEvent) {
+    this.onChooseSuggestion(value, evt);
+    this.close();
+  }
   abstract getSuggestions(query: string): T[];
   abstract renderSuggestion(value: T, el: HTMLElement): void;
   abstract onChooseSuggestion(item: T, evt: MouseEvent | KeyboardEvent): void;
@@ -68,5 +95,6 @@ export class Setting {
   setHeading() { return this; }
   addText() { return this; }
   addToggle() { return this; }
+  addDropdown() { return this; }
   addButton() { return this; }
 }
