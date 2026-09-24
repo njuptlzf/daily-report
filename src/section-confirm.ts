@@ -226,7 +226,6 @@ export class SectionConfirmModal extends Modal {
     app: App,
     private sections: SectionInfo[],
     private component: Component,
-    private hasTemplate: boolean,
     onComplete: (result: ConfirmResult) => void
   ) {
     super(app);
@@ -315,13 +314,12 @@ export class SectionConfirmModal extends Modal {
 
     new Setting(contentEl)
       .setName("")
-      .addButton((btn) => {
+      .addButton((btn) =>
         btn.setButtonText(t("modal.useTemplate")).onClick(() => {
           this.onComplete?.({ mode: "template" });
           this.close();
-        });
-        if (!this.hasTemplate) btn.setDisabled(true);
-      });
+        })
+      );
 
     new Setting(contentEl)
       .setName("")

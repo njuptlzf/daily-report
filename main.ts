@@ -180,7 +180,7 @@ export default class DailyReportPlugin extends Plugin {
       if (!useTemplate && this.settings.confirmBeforeCreate) {
         const requirements = analyzeSectionsForConfirmation(sourceMarkdown);
         if (requirements.length > 0) {
-          const res = await this.showConfirmationModal(requirements, hasTemplate);
+          const res = await this.showConfirmationModal(requirements);
           if (res.mode === "cancel") return;
           if (res.mode === "template") useTemplate = true;
           else decisions = res.decisions;
@@ -353,15 +353,13 @@ export default class DailyReportPlugin extends Plugin {
    * Show the section confirmation modal and return the user's outcome.
    */
   async showConfirmationModal(
-    sections: import("./src/carry-over").SectionInfo[],
-    hasTemplate: boolean
+    sections: import("./src/carry-over").SectionInfo[]
   ): Promise<import("./src/section-confirm").ConfirmResult> {
     return new Promise((resolve) => {
       const modal = new SectionConfirmModal(
         this.app,
         sections,
         this,
-        hasTemplate,
         (result) => resolve(result)
       );
       modal.open();
