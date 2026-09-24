@@ -31,6 +31,9 @@ export type ConfirmResult =
   | { mode: "template" }
   | { mode: "cancel" };
 
+/** Outcome of the "gap since last report" dialog. */
+export type GapChoice = "carry" | "template" | "cancel";
+
 const STATUS_VALUES: StatusDecision[] = [
   "pending",
   "verifying",
@@ -337,6 +340,60 @@ export class SectionConfirmModal extends Modal {
       decisions.set(info.title, this.selected.get(info.title) ?? info.status);
     }
     return decisions;
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
+/**
+ * Shown when there is a gap between today and the most recent report: asks
+ * whether to carry over from that report or start fresh from the template.
+ */
+export class GapChoiceModal extends Modal {
+  private onComplete: ((choice: GapChoice) => void) | null;
+
+  constructor(
+    app: App,
+    private days: number,
+    onChoice: (choice: GapChoice) => void
+  ) {
+    super(app);
+    this.onComplete = onChoice;
+  }
+
+  onOpen(): void {
+    const { contentEl, titleEl } = this;
+    titleEl.setText(t("gap.title"));
+    contentEl.createEl("p", { text: t("gap.message", { days: this.days }) });
+
+    new Setting(contentEl)
+      .setName("")
+      .addButton((btn) =>
+        btn.setButtonText(t("gap.carry")).setCta().onClick(() => {
+          this.onComplete?.("carry");
+          this.close();
+        })
+      );
+
+    new Setting(contentEl)
+      .setName("")
+      .addButton((btn) =>
+        btn.setButtonText(t("gap.template")).onClick(() => {
+          this.onComplete?.("template");
+          this.close();
+        })
+      );
+
+    new Setting(contentEl)
+      .setName("")
+      .addButton((btn) =>
+        btn.setButtonText(t("modal.cancel")).onClick(() => {
+          this.onComplete?.("cancel");
+          this.close();
+        })
+      );
   }
 
   onClose(): void {

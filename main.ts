@@ -35,7 +35,11 @@ import {
   analyzeSectionsForConfirmation,
   carryOver,
 } from "./src/carry-over";
-import { SectionConfirmModal } from "./src/section-confirm";
+import {
+  SectionConfirmModal,
+  GapChoiceModal,
+  type GapChoice,
+} from "./src/section-confirm";
 import { t, setLocale } from "./src/i18n";
 
 /** Extract a human-readable message from an unknown thrown value. */
@@ -136,59 +140,69 @@ export default class DailyReportPlugin extends Plugin {
       return;
     }
 
-    // Read yesterday's note (if any)
-    const yesterday = today.minus({ days: 1 });
-    const yesterdayPath = this.computePath(yesterday);
-    let yesterdayMarkdown = "";
-    let yesterdayFile: TFile | null = null;
-    try {
-      yesterdayFile = this.findFile(yesterdayPath);
-      if (yesterdayFile) {
-        yesterdayMarkdown = await this.app.vault.read(yesterdayFile);
+    // Find the most recent previous report (walk back up to a year).
+    let sourceFile: TFile | null = null;
+    let sourceMarkdown = "";
+    let sourceOffset = 0;
+    for (let offset = 1; offset <= 366; offset++) {
+      const day = today.minus({ days: offset });
+      const f = this.findFile(this.computePath(day));
+      if (f) {
+        sourceFile = f;
+        try {
+          sourceMarkdown = await this.app.vault.read(f);
+        } catch (e: unknown) {
+          new Notice(t("error.readYesterday", { msg: errorMessage(e) }));
+          sourceMarkdown = "";
+        }
+        sourceOffset = offset;
+        break;
       }
-    } catch (e: unknown) {
-      new Notice(t("error.readYesterday", { msg: errorMessage(e) }));
-      yesterdayMarkdown = "";
     }
 
     const hasTemplate = !!this.settings.templatePath.trim();
 
-    // Decide today's content and whether to write back to yesterday.
     let todayMarkdown = "";
-    let updatedYesterday = yesterdayMarkdown;
+    let updatedSource = sourceMarkdown;
     let writeBack = false;
 
-    if (yesterdayMarkdown) {
-      // Carry-over day.
-      let mode: "rollover" | "template" = "rollover";
+    if (sourceMarkdown) {
+      let useTemplate = false;
       let decisions = new Map<string, SectionStatus>();
 
-      if (this.settings.confirmBeforeCreate) {
-        const requirements = analyzeSectionsForConfirmation(yesterdayMarkdown);
+      // Gap since the last report: ask carry vs template.
+      if (sourceOffset > 1) {
+        const gap = await this.showGapModal(sourceOffset);
+        if (gap === "cancel") return;
+        if (gap === "template") useTemplate = true;
+      }
+
+      if (!useTemplate && this.settings.confirmBeforeCreate) {
+        const requirements = analyzeSectionsForConfirmation(sourceMarkdown);
         if (requirements.length > 0) {
           const res = await this.showConfirmationModal(requirements, hasTemplate);
           if (res.mode === "cancel") return;
-          if (res.mode === "template") mode = "template";
+          if (res.mode === "template") useTemplate = true;
           else decisions = res.decisions;
         }
       }
 
-      if (mode === "template" && hasTemplate) {
-        // Start from template: today = template, yesterday left untouched.
+      if (useTemplate) {
+        // Start from template (blank if none): the source note stays untouched.
         todayMarkdown = await this.renderTemplateOrEmpty();
       } else {
         const result = carryOver(
-          yesterdayMarkdown,
+          sourceMarkdown,
           "",
           decisions,
           this.settings.deleteCompletedTasks
         );
         todayMarkdown = result.todayMarkdown;
-        updatedYesterday = result.yesterdayMarkdown;
+        updatedSource = result.yesterdayMarkdown;
         writeBack = decisions.size > 0;
       }
     } else {
-      // First day: use the template (empty file if none set).
+      // No previous report at all: first day uses the template (blank if none).
       todayMarkdown = hasTemplate ? await this.renderTemplateOrEmpty() : "";
     }
 
@@ -202,10 +216,10 @@ export default class DailyReportPlugin extends Plugin {
       return;
     }
 
-    // Write status markers back to yesterday (rollover mode only)
-    if (writeBack && yesterdayFile) {
+    // Write status markers back to the source note (rollover mode only)
+    if (writeBack && sourceFile) {
       try {
-        await this.app.vault.process(yesterdayFile, () => updatedYesterday);
+        await this.app.vault.process(sourceFile, () => updatedSource);
         new Notice(t("notice.statusUpdated"));
       } catch (e: unknown) {
         new Notice(t("error.updateYesterday", { msg: errorMessage(e) }));
@@ -350,6 +364,16 @@ export default class DailyReportPlugin extends Plugin {
         hasTemplate,
         (result) => resolve(result)
       );
+      modal.open();
+    });
+  }
+
+  /**
+   * Ask the user how to proceed when there is a gap since the last report.
+   */
+  async showGapModal(days: number): Promise<GapChoice> {
+    return new Promise((resolve) => {
+      const modal = new GapChoiceModal(this.app, days, (choice) => resolve(choice));
       modal.open();
     });
   }
