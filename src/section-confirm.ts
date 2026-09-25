@@ -96,32 +96,6 @@ class RequirementDetailModal extends Modal {
       this.component
     );
 
-    // Per-#### status controls (each subtask can be carried over separately).
-    if (this.info.children.length > 0) {
-      const subWrap = body.createDiv({ cls: "sc-subtasks" });
-      subWrap.createDiv({
-        cls: "sc-subtasks-title",
-        text: t("modal.subtasksLabel"),
-      });
-      for (const child of this.info.children) {
-        const row = subWrap.createDiv({ cls: "sc-subtask-row" });
-        row.createSpan({
-          cls: "sc-subtask-name",
-          text: "#### " + child.title,
-        });
-        const host = row.createDiv({ cls: "sc-status-select" });
-        const dd = new DropdownComponent(host);
-        for (const value of STATUS_VALUES) {
-          dd.addOption(value, t(`status.${value}`));
-        }
-        dd.setValue(this.statusOf(child.title, child.status)).onChange(
-          (value) => {
-            this.chosen.set(child.title, value as StatusDecision);
-          }
-        );
-      }
-    }
-
     // Pinned footer: single-select status for the ### requirement + apply.
     const footer = contentEl.createDiv({ cls: "sc-detail-footer" });
     footer.createDiv({
@@ -157,6 +131,33 @@ class RequirementDetailModal extends Modal {
       labelEl.addEventListener("mouseenter", () => showTip(value));
       labelEl.addEventListener("mouseleave", () => showTip(own()));
     }
+
+    // Per-#### status controls, placed under the main ### status.
+    if (this.info.children.length > 0) {
+      const subWrap = footer.createDiv({ cls: "sc-subtasks" });
+      subWrap.createDiv({
+        cls: "sc-subtasks-title",
+        text: t("modal.subtasksLabel"),
+      });
+      for (const child of this.info.children) {
+        const row = subWrap.createDiv({ cls: "sc-subtask-row" });
+        row.createSpan({
+          cls: "sc-subtask-name",
+          text: "#### " + child.title,
+        });
+        const host = row.createDiv({ cls: "sc-status-select" });
+        const dd = new DropdownComponent(host);
+        for (const value of STATUS_VALUES) {
+          dd.addOption(value, t(`status.${value}`));
+        }
+        dd.setValue(this.statusOf(child.title, child.status)).onChange(
+          (value) => {
+            this.chosen.set(child.title, value as StatusDecision);
+          }
+        );
+      }
+    }
+
     const apply = footer.createEl("button", { cls: "mod-cta" });
     apply.setText(t("modal.apply"));
     apply.addEventListener("click", () => {
