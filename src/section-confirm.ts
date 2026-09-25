@@ -60,19 +60,23 @@ function orderedContext(info: SectionInfo): string {
   return parts.join("\n\n");
 }
 
-/** Detail popup: rendered requirement content + pinned single-select status. */
+/** Detail popup: rendered content + per-#### and ### status controls. */
 class RequirementDetailModal extends Modal {
-  private chosen: StatusDecision;
+  private chosen: Map<string, StatusDecision>;
 
   constructor(
     app: App,
     private info: SectionInfo,
     private component: Component,
-    initial: StatusDecision,
-    private onPick: (status: StatusDecision) => void
+    initial: Map<string, StatusDecision>,
+    private onPick: (decisions: Map<string, StatusDecision>) => void
   ) {
     super(app);
-    this.chosen = initial;
+    this.chosen = new Map(initial);
+  }
+
+  private statusOf(title: string, fallback: StatusDecision): StatusDecision {
+    return this.chosen.get(title) ?? fallback;
   }
 
   onOpen(): void {
@@ -92,7 +96,33 @@ class RequirementDetailModal extends Modal {
       this.component
     );
 
-    // Pinned footer: single-select status + apply.
+    // Per-#### status controls (each subtask can be carried over separately).
+    if (this.info.children.length > 0) {
+      const subWrap = body.createDiv({ cls: "sc-subtasks" });
+      subWrap.createDiv({
+        cls: "sc-subtasks-title",
+        text: t("modal.subtasksLabel"),
+      });
+      for (const child of this.info.children) {
+        const row = subWrap.createDiv({ cls: "sc-subtask-row" });
+        row.createSpan({
+          cls: "sc-subtask-name",
+          text: "#### " + child.title,
+        });
+        const host = row.createDiv({ cls: "sc-status-select" });
+        const dd = new DropdownComponent(host);
+        for (const value of STATUS_VALUES) {
+          dd.addOption(value, t(`status.${value}`));
+        }
+        dd.setValue(this.statusOf(child.title, child.status)).onChange(
+          (value) => {
+            this.chosen.set(child.title, value as StatusDecision);
+          }
+        );
+      }
+    }
+
+    // Pinned footer: single-select status for the ### requirement + apply.
     const footer = contentEl.createDiv({ cls: "sc-detail-footer" });
     footer.createDiv({
       cls: "sc-detail-footer-label",
@@ -100,10 +130,11 @@ class RequirementDetailModal extends Modal {
     });
     // Always-visible explanation line (no clipped hover bubble).
     const tipLine = footer.createDiv({ cls: "sc-detail-tip" });
+    const own = () => this.statusOf(this.info.title, this.info.status);
     const showTip = (status: StatusDecision) => {
       tipLine.textContent = t(`tip.${status}`);
     };
-    showTip(this.chosen);
+    showTip(own());
 
     const optionsDiv = footer.createDiv({ cls: "section-status-options" });
     const groupName = "sc-status-" + Math.random().toString(36).slice(2);
@@ -114,17 +145,17 @@ class RequirementDetailModal extends Modal {
         value,
       });
       input.name = groupName;
-      input.checked = value === this.chosen;
+      input.checked = value === own();
       input.addEventListener("change", () => {
         if (!input.checked) return;
-        this.chosen = value;
+        this.chosen.set(this.info.title, value);
         showTip(value);
       });
       const iconEl = labelEl.createSpan({ cls: `status-icon status-icon-${value}` });
       setIcon(iconEl, STATUS_ICONS[value]);
       labelEl.createSpan({ text: t(`status.${value}`) });
       labelEl.addEventListener("mouseenter", () => showTip(value));
-      labelEl.addEventListener("mouseleave", () => showTip(this.chosen));
+      labelEl.addEventListener("mouseleave", () => showTip(own()));
     }
     const apply = footer.createEl("button", { cls: "mod-cta" });
     apply.setText(t("modal.apply"));
@@ -194,6 +225,26 @@ class ReviewChangesModal extends Modal {
           text: t(`status.${next}`),
         });
       }
+
+      // Subtasks whose status changed under this requirement.
+      for (const child of info.children) {
+        const cnext = this.decisions.get(child.title) ?? child.status;
+        if (cnext === child.status) continue;
+        const sub = list.createDiv({
+          cls: "sc-review-item is-changed sc-review-sub",
+        });
+        sub.createSpan({ cls: "sc-review-title", text: "#### " + child.title });
+        const trans = sub.createSpan({ cls: "sc-review-trans" });
+        trans.createSpan({
+          cls: "sc-review-old",
+          text: t(`status.${child.status}`),
+        });
+        trans.createSpan({ cls: "sc-review-arrow", text: " → " });
+        trans.createSpan({
+          cls: "sc-review-new status-" + cnext,
+          text: t(`status.${cnext}`),
+        });
+      }
     }
 
     new Setting(contentEl)
@@ -241,6 +292,9 @@ export class SectionConfirmModal extends Modal {
 
     for (const info of this.sections) {
       this.selected.set(info.title, info.status);
+      for (const child of info.children) {
+        this.selected.set(child.title, child.status);
+      }
 
       const row = contentEl.createDiv({
         cls: "section-confirm-row status-" + info.status,
@@ -279,12 +333,32 @@ export class SectionConfirmModal extends Modal {
       });
 
       clickable.addEventListener("click", () => {
+        // Seed the detail popup with the current status of the ### and its ####.
+        const initial = new Map<string, StatusDecision>();
+        initial.set(
+          info.title,
+          this.selected.get(info.title) ?? info.status
+        );
+        for (const child of info.children) {
+          initial.set(
+            child.title,
+            this.selected.get(child.title) ?? child.status
+          );
+        }
         new RequirementDetailModal(
           this.app,
           info,
           this.component,
-          this.selected.get(info.title) ?? info.status,
-          setStatus
+          initial,
+          (picked) => {
+            // Detail edited the ### and/or its ####; store all of them.
+            for (const [title, status] of picked) {
+              this.selected.set(title, status);
+            }
+            const own = this.selected.get(info.title) ?? info.status;
+            row.className = "section-confirm-row status-" + own;
+            dd.setValue(own);
+          }
         ).open();
       });
     }
@@ -331,11 +405,23 @@ export class SectionConfirmModal extends Modal {
       );
   }
 
-  /** One decision per ### requirement; #### subtasks follow their note status. */
+  /**
+   * Decisions for the ### requirements, plus each #### subtask when its parent
+   * requirement stays open (a closed requirement drops its whole subtree).
+   */
   private collectDecisions(): Map<string, StatusDecision> {
     const decisions = new Map<string, StatusDecision>();
     for (const info of this.sections) {
-      decisions.set(info.title, this.selected.get(info.title) ?? info.status);
+      const status = this.selected.get(info.title) ?? info.status;
+      decisions.set(info.title, status);
+      if (!isTerminalStatus(status)) {
+        for (const child of info.children) {
+          decisions.set(
+            child.title,
+            this.selected.get(child.title) ?? child.status
+          );
+        }
+      }
     }
     return decisions;
   }

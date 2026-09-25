@@ -145,7 +145,7 @@ export function analyzeSectionsForConfirmation(
           content: ownContent(mdLines, node),
           fullMarkdown: mdLines.slice(node.lineStart, node.lineEnd + 1).join("\n"),
           children: node.children
-            .filter((ch) => ch.level === 4 && !isTerminal(ch.status))
+            .filter((ch) => ch.level === 4)
             .map((ch) => toSubtaskInfo(ch, mdLines)),
         });
       } else {

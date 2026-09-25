@@ -54,6 +54,15 @@ describe("analyzeSectionsForConfirmation", () => {
     expect(reqA.children).toHaveLength(0);
   });
 
+  it("includes terminal #### children too, so they can be re-edited", () => {
+    const md =
+      "## P\n\n### R\n#### S1\n- [ ] a\n#### S2 <!-- req-status: done -->\n- [x] b";
+    const info = analyzeSectionsForConfirmation(md);
+    const req = info.find((i) => i.title === "R")!;
+    expect(req.children.map((c) => c.title)).toEqual(["S1", "S2"]);
+    expect(req.children.find((c) => c.title === "S2")!.status).toBe("done");
+  });
+
   it("captures the raw content between heading levels for the preview", () => {
     const info = analyzeSectionsForConfirmation(YESTERDAY);
     // 需求A owns the "- [x] 任务1" line directly under its heading.

@@ -319,3 +319,33 @@
   font-size: 12px;
   width: 100%;
 }
+
+.sc-review-sub {
+  margin-left: 16px;
+}
+
+/* Per-#### status controls inside the detail popup */
+.sc-subtasks {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--background-modifier-border);
+}
+
+.sc-subtasks-title {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.sc-subtask-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.sc-subtask-name {
+  flex: 1 1 auto;
+  font-size: 13px;
+  min-width: 0;
+}
