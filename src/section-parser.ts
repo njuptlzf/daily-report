@@ -4,13 +4,19 @@
  * Parses markdown into a tree of sections (## / ### headings).
  * Each section tracks:
  *   - Its heading text, level, and title
- *   - Its status (pending / done / cancelled) via HTML comment marker
+ *   - Its status (not-started / in-progress / verifying / done / cancelled)
+ *     via HTML comment marker, plus an optional closing reason comment
  *   - Tasks directly under it (- [ ] / - [x])
  *   - Child sections (nested headings)
  *   - Line range in the original markdown
  */
 
-export type SectionStatus = "pending" | "verifying" | "done" | "cancelled";
+export type SectionStatus =
+  | "not-started"
+  | "in-progress"
+  | "verifying"
+  | "done"
+  | "cancelled";
 
 export interface Task {
   /** Full line text, e.g. "- [ ] Fix the bug" */
@@ -24,7 +30,7 @@ export interface Task {
 }
 
 export interface Section {
-  /** Full heading line, e.g. "## 客户问题 <!-- req-status: pending -->" */
+  /** Full heading line, e.g. "## 客户问题 <!-- req-status: verifying -->" */
   heading: string;
   /** Heading text without the status marker, e.g. "## 客户问题" */
   headingText: string;
@@ -32,7 +38,7 @@ export interface Section {
   level: number;
   /** Title without # and status marker, e.g. "客户问题" */
   title: string;
-  /** Section status: pending (default), done, or cancelled */
+  /** Section status: in-progress (default), not-started, verifying, done, cancelled */
   status: SectionStatus;
   /** Tasks directly under this heading (not in children). */
   tasks: Task[];
@@ -47,8 +53,23 @@ export interface Section {
 /** Pattern matching markdown headings: #, ##, ###, etc. */
 const HEADING_PATTERN = /^(#{1,6})\s+(.+)$/;
 
-/** Pattern matching the status marker: <!-- req-status: pending --> */
-const STATUS_MARKER_PATTERN = /<!--\s*req-status:\s*(pending|verifying|done|cancelled)\s*-->/i;
+/** Pattern matching the status marker: <!-- req-status: verifying --> */
+const STATUS_MARKER_PATTERN =
+  /<!--\s*req-status:\s*(not-started|in-progress|pending|verifying|done|cancelled)\s*-->/i;
+
+/** Pattern matching the closing-reason comment: <!-- req-reason: 已上线验证通过 --> */
+const REASON_MARKER_PATTERN = /<!--\s*req-reason:\s*(.*?)\s*-->/i;
+
+/** Legacy marker value "pending" meant what "in-progress" means now. */
+function normalizeStatus(raw: string): SectionStatus {
+  const v = raw.toLowerCase();
+  return v === "pending" ? "in-progress" : (v as SectionStatus);
+}
+
+/** Terminal (closed) statuses are dropped on rollover instead of carried. */
+export function isTerminalStatus(status: SectionStatus): boolean {
+  return status === "done" || status === "cancelled";
+}
 
 /** Pattern matching strikethrough in heading: ~~title~~ */
 const STRIKETHROUGH_PATTERN = /^~~(.+?)~~$/;
@@ -75,7 +96,7 @@ export function parseSections(markdown: string): Section[] {
     headingText: "",
     level: 0,
     title: "",
-    status: "pending",
+    status: "in-progress",
     tasks: [],
     children: [],
     lineStart: 0,
@@ -91,23 +112,25 @@ export function parseSections(markdown: string): Section[] {
       const level = headingMatch[1].length;
       const rawTitle = headingMatch[2].trim();
 
-      // Parse status from HTML comment
+      // Parse status from HTML comment (a trailing req-reason comment is
+      // stripped first so strikethrough/marker detection stays anchored).
       let status: SectionStatus;
       let title: string;
 
-      const statusMatch = rawTitle.match(STATUS_MARKER_PATTERN);
+      const noReason = rawTitle.replace(REASON_MARKER_PATTERN, "").trim();
+      const statusMatch = noReason.match(STATUS_MARKER_PATTERN);
       if (statusMatch) {
-        status = statusMatch[1].toLowerCase() as SectionStatus;
-        title = rawTitle.replace(STATUS_MARKER_PATTERN, "").trim();
+        status = normalizeStatus(statusMatch[1]);
+        title = noReason.replace(STATUS_MARKER_PATTERN, "").trim();
       } else {
         // Check for strikethrough as done marker: ~~title~~ or ~~title
-        const strikeMatch = rawTitle.match(STRIKETHROUGH_PATTERN);
+        const strikeMatch = noReason.match(STRIKETHROUGH_PATTERN);
         if (strikeMatch) {
           status = "done";
           title = (strikeMatch[1] || strikeMatch[2]).trim();
         } else {
-          status = "pending";
-          title = rawTitle;
+          status = "in-progress";
+          title = noReason;
         }
       }
 
@@ -209,15 +232,14 @@ export function hasPendingWork(section: Section): boolean {
 /**
  * Check if a section needs status confirmation.
  * A section needs confirmation if:
- *   - Its status is "pending" or "verifying"
+ *   - Its status is open (not-started / in-progress / verifying)
  *   - It has no pending work (no unchecked tasks)
  *
  * This is the case where all tasks are done, but we need to confirm
  * whether the requirement (section) itself is closed.
  */
 export function needsConfirmation(section: Section): boolean {
-  return (section.status === "pending" || section.status === "verifying") &&
-    !hasPendingWork(section);
+  return !isTerminalStatus(section.status) && !hasPendingWork(section);
 }
 
 /**
@@ -235,9 +257,7 @@ export function allSubsectionsCompleted(section: Section): boolean {
   if (subsections.length === 0) return true;
 
   // All subsections must be done or cancelled
-  return subsections.every((sub) =>
-    sub.status === "done" || sub.status === "cancelled"
-  );
+  return subsections.every((sub) => isTerminalStatus(sub.status));
 }
 
 /**
@@ -250,9 +270,7 @@ export function hasPendingSubsections(section: Section): boolean {
   if (subsections.length === 0) return false;
 
   // Any subsection that is not done/cancelled means there's pending work
-  return subsections.some((sub) =>
-    sub.status === "pending" || sub.status === "verifying"
-  );
+  return subsections.some((sub) => !isTerminalStatus(sub.status));
 }
 
 /**
@@ -261,7 +279,7 @@ export function hasPendingSubsections(section: Section): boolean {
  * @param title - The section title
  * @param level - The heading level (2 for ##, 3 for ###, etc.)
  * @param status - The section status
- * @returns The full heading line, e.g. "## 客户问题 <!-- req-status: pending -->"
+ * @returns The full heading line, e.g. "## 客户问题 <!-- req-status: verifying -->"
  */
 export function buildHeading(
   title: string,
@@ -288,36 +306,51 @@ export function extractSectionMarkdown(
   return lines.slice(section.lineStart, section.lineEnd + 1).join("\n");
 }
 
+/** Collapse a free-text reason into a single safe line for an HTML comment. */
+function sanitizeReason(reason?: string): string {
+  if (!reason) return "";
+  return reason.replace(/<!--|-->/g, "").replace(/\s+/g, " ").trim();
+}
+
 /**
  * Update the status marker in a heading.
- * - "pending": the DEFAULT state -> no marker at all (strips any existing one)
+ * - "in-progress": the DEFAULT state -> no marker at all (strips any existing one)
  * - "done": adds strikethrough ~~title~~
- * - "verifying" / "cancelled": adds an explicit <!-- req-status: ... --> marker
+ * - "not-started" / "verifying" / "cancelled": explicit <!-- req-status: ... -->
+ * - reason (when given): appends <!-- req-reason: ... --> (used for closings)
  *
  * @param heading - The original heading text
  * @param newStatus - The new status
+ * @param reason - Optional closing reason written as an HTML comment
  * @returns The updated heading with the new status
  */
 export function updateHeadingStatus(
   heading: string,
-  newStatus: SectionStatus
+  newStatus: SectionStatus,
+  reason?: string
 ): string {
-  // First, remove any existing status markers and strikethrough
+  // First, remove any existing status/reason markers and strikethrough
   let cleanHeading = heading
     .replace(STATUS_MARKER_PATTERN, "")
+    .replace(REASON_MARKER_PATTERN, "")
     .replace(/^(\s*#+\s*)~~(.+?)~~\s*$/, "$1$2");
 
   // Remove trailing whitespace
   cleanHeading = cleanHeading.replace(/\s+$/, "");
 
+  let line: string;
   if (newStatus === "done") {
     // Add strikethrough to the title
-    return cleanHeading.replace(/^(\s*#+\s*)(.+)$/, "$1~~$2~~");
+    line = cleanHeading.replace(/^(\s*#+\s*)(.+)$/, "$1~~$2~~");
+  } else if (newStatus === "in-progress") {
+    // Default state: leave the heading clean, no marker (unmarked == in progress).
+    line = cleanHeading;
+  } else {
+    // not-started / verifying / cancelled: write an explicit marker
+    line = `${cleanHeading} <!-- req-status: ${newStatus} -->`;
   }
-  if (newStatus === "pending") {
-    // Default state: leave the heading clean, no marker (unmarked == pending).
-    return cleanHeading;
-  }
-  // verifying / cancelled: write an explicit marker
-  return `${cleanHeading} <!-- req-status: ${newStatus} -->`;
+
+  const cleanReason = sanitizeReason(reason);
+  if (cleanReason) line += ` <!-- req-reason: ${cleanReason} -->`;
+  return line;
 }

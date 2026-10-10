@@ -81,7 +81,8 @@
   background: var(--background-modifier-hover);
 }
 
-.section-confirm-row.status-pending { border-left-color: var(--color-yellow); }
+.section-confirm-row.status-not-started { border-left-color: var(--color-gray); }
+.section-confirm-row.status-in-progress { border-left-color: var(--color-yellow); }
 .section-confirm-row.status-verifying { border-left-color: var(--color-blue); }
 .section-confirm-row.status-done { border-left-color: var(--color-green); }
 .section-confirm-row.status-cancelled { border-left-color: var(--color-red); }
@@ -144,7 +145,8 @@
   flex: 0 0 auto;
 }
 
-.sc-chip.status-pending { color: var(--color-yellow); }
+.sc-chip.status-not-started { color: var(--color-gray); }
+.sc-chip.status-in-progress { color: var(--color-yellow); }
 .sc-chip.status-verifying { color: var(--color-blue); }
 .sc-chip.status-done { color: var(--color-green); }
 .sc-chip.status-cancelled { color: var(--color-red); }
@@ -178,7 +180,8 @@
 
 .status-icon svg { width: 14px; height: 14px; }
 
-.status-icon-pending { color: var(--color-yellow); }
+.status-icon-not-started { color: var(--color-gray); }
+.status-icon-in-progress { color: var(--color-yellow); }
 .status-icon-verifying { color: var(--color-blue); }
 .status-icon-done { color: var(--color-green); }
 .status-icon-cancelled { color: var(--color-red); }
@@ -309,7 +312,8 @@
   text-decoration: line-through;
 }
 
-.sc-review-new.status-pending { color: var(--color-yellow); }
+.sc-review-new.status-not-started { color: var(--color-gray); }
+.sc-review-new.status-in-progress { color: var(--color-yellow); }
 .sc-review-new.status-verifying { color: var(--color-blue); }
 .sc-review-new.status-done { color: var(--color-green); }
 .sc-review-new.status-cancelled { color: var(--color-red); }
@@ -350,4 +354,23 @@
   flex: 1 1 auto;
   font-size: 13px;
   min-width: 0;
+}
+
+/* Closing-reason prompt */
+.sc-reason-modal .sc-reason-desc {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.sc-reason-textarea {
+  width: 100%;
+  min-height: 5em;
+  resize: vertical;
+  margin-bottom: 8px;
+}
+
+.sc-review-reason {
+  color: var(--text-faint);
+  font-size: 12px;
 }
