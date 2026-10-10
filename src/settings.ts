@@ -40,7 +40,8 @@ export interface DailyReportSettings {
 
   /**
    * The status marker format used in section headings.
-   * {status} will be replaced with "pending", "done", or "cancelled".
+   * {status} will be replaced with "not-started", "in-progress", "verifying",
+   * "done", or "cancelled".
    */
   statusMarkerFormat: string;
 }

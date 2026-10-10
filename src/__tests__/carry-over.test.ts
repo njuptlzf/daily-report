@@ -82,11 +82,11 @@ describe("analyzeSectionsForConfirmation", () => {
     expect(info.find((i) => i.title === "需求B")!.needsConfirm).toBe(false);
   });
 
-  it("treats a first-day note without markers as pending", () => {
+  it("treats a first-day note without markers as in-progress", () => {
     const noMarkers = "## 今日AI\n\n### 需求X\n- [ ] 任务";
     const info = analyzeSectionsForConfirmation(noMarkers);
     expect(info).toHaveLength(1);
-    expect(info[0].status).toBe("pending");
+    expect(info[0].status).toBe("in-progress");
   });
 });
 
@@ -102,8 +102,8 @@ describe("applyStatusDecisions", () => {
     expect(updated).not.toContain("~~今日AI~~");
   });
 
-  it("leaves a pending requirement unmarked (pending is the default)", () => {
-    const decisions = new Map<string, SectionStatus>([["需求B", "pending"]]);
+  it("leaves an in-progress requirement unmarked (in-progress is the default)", () => {
+    const decisions = new Map<string, SectionStatus>([["需求B", "in-progress"]]);
     const updated = applyStatusDecisions(YESTERDAY, decisions);
     const lineB = updated.split("\n").find((l) => l.startsWith("### 需求B"));
     expect(lineB).toBe("### 需求B"); // no marker written
@@ -111,10 +111,27 @@ describe("applyStatusDecisions", () => {
 
   it("strips a legacy pending marker back to a clean heading", () => {
     // 需求A already carries "<!-- req-status: pending -->" in the fixture.
-    const decisions = new Map<string, SectionStatus>([["需求A", "pending"]]);
+    const decisions = new Map<string, SectionStatus>([["需求A", "in-progress"]]);
     const updated = applyStatusDecisions(YESTERDAY, decisions);
     expect(updated).toContain("### 需求A");
     expect(updated).not.toContain("req-status: pending");
+  });
+
+  it("writes a closing reason next to a terminal status", () => {
+    const decisions = new Map<string, SectionStatus>([["需求A", "done"]]);
+    const reasons = new Map([["需求A", "已上线验证通过"]]);
+    const updated = applyStatusDecisions(YESTERDAY, decisions, reasons);
+    expect(updated).toContain(
+      "### ~~需求A~~ <!-- req-reason: 已上线验证通过 -->"
+    );
+  });
+
+  it("ignores a reason for a non-terminal decision", () => {
+    const decisions = new Map<string, SectionStatus>([["需求A", "verifying"]]);
+    const reasons = new Map([["需求A", "不该出现"]]);
+    const updated = applyStatusDecisions(YESTERDAY, decisions, reasons);
+    expect(updated).toContain("### 需求A <!-- req-status: verifying -->");
+    expect(updated).not.toContain("req-reason");
   });
 
   it("returns the original markdown when there are no decisions", () => {
@@ -143,7 +160,7 @@ describe("rolloverMarkdown", () => {
 
   it("drops a #### subtask the user closed but keeps its parent", () => {
     const decisions = new Map<string, SectionStatus>([
-      ["需求B", "pending"],
+      ["需求B", "in-progress"],
       ["子任务B1", "cancelled"],
     ]);
     const out = rolloverMarkdown(YESTERDAY, decisions, false);
@@ -176,6 +193,15 @@ describe("carryOver", () => {
     expect(result.yesterdayMarkdown).toBe(yesterday);
     expect(result.todayMarkdown).toContain(
       "### 需求V <!-- req-status: verifying -->"
+    );
+  });
+
+  it("passes closing reasons through to yesterday's note", () => {
+    const decisions = new Map<string, SectionStatus>([["需求A", "cancelled"]]);
+    const reasons = new Map([["需求A", "需求作废"]]);
+    const result = carryOver(YESTERDAY, "", decisions, false, reasons);
+    expect(result.yesterdayMarkdown).toContain(
+      "### 需求A <!-- req-status: cancelled --> <!-- req-reason: 需求作废 -->"
     );
   });
 

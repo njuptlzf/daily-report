@@ -169,6 +169,7 @@ export default class DailyReportPlugin extends Plugin {
     if (sourceMarkdown) {
       let useTemplate = false;
       let decisions = new Map<string, SectionStatus>();
+      let reasons = new Map<string, string>();
 
       // Gap since the last report: ask carry vs template.
       if (sourceOffset > 1) {
@@ -183,7 +184,10 @@ export default class DailyReportPlugin extends Plugin {
           const res = await this.showConfirmationModal(requirements);
           if (res.mode === "cancel") return;
           if (res.mode === "template") useTemplate = true;
-          else decisions = res.decisions;
+          else {
+            decisions = res.decisions;
+            reasons = res.reasons;
+          }
         }
       }
 
@@ -195,7 +199,8 @@ export default class DailyReportPlugin extends Plugin {
           sourceMarkdown,
           "",
           decisions,
-          this.settings.deleteCompletedTasks
+          this.settings.deleteCompletedTasks,
+          reasons
         );
         todayMarkdown = result.todayMarkdown;
         updatedSource = result.yesterdayMarkdown;

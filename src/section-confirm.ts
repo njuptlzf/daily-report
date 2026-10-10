@@ -21,13 +21,19 @@ import {
   setIcon,
 } from "obsidian";
 import { SectionInfo } from "./carry-over";
+import { isTerminalStatus, SectionStatus } from "./section-parser";
 import { t } from "./i18n";
 
-export type StatusDecision = "pending" | "verifying" | "done" | "cancelled";
+export type StatusDecision = SectionStatus;
 
 /** Outcome of the confirmation dialog. */
 export type ConfirmResult =
-  | { mode: "rollover"; decisions: Map<string, StatusDecision> }
+  | {
+      mode: "rollover";
+      decisions: Map<string, StatusDecision>;
+      /** Optional closing reasons for terminal decisions (title -> text). */
+      reasons: Map<string, string>;
+    }
   | { mode: "template" }
   | { mode: "cancel" };
 
@@ -35,22 +41,20 @@ export type ConfirmResult =
 export type GapChoice = "carry" | "template" | "cancel";
 
 const STATUS_VALUES: StatusDecision[] = [
-  "pending",
+  "not-started",
+  "in-progress",
   "verifying",
   "done",
   "cancelled",
 ];
 
 const STATUS_ICONS: Record<StatusDecision, string> = {
-  pending: "loader",
+  "not-started": "clock",
+  "in-progress": "loader",
   verifying: "eye",
   done: "check",
   cancelled: "x",
 };
-
-function isTerminalStatus(status: StatusDecision): boolean {
-  return status === "done" || status === "cancelled";
-}
 
 /** Build the requirement's markdown in document order: ## -> ### -> ####. */
 function orderedContext(info: SectionInfo): string {
@@ -60,19 +64,102 @@ function orderedContext(info: SectionInfo): string {
   return parts.join("\n\n");
 }
 
+/**
+ * Small prompt shown when a terminal status is picked: an optional closing
+ * reason that gets written back as an HTML comment on the heading. Closing
+ * via Esc/X simply skips the reason (the status change stands).
+ */
+class ReasonPromptModal extends Modal {
+  constructor(
+    app: App,
+    private initial: string,
+    private onSubmit: (reason: string) => void
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    this.modalEl.addClass("sc-reason-modal");
+    this.titleEl.setText(t("reason.title"));
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("p", { cls: "sc-reason-desc", text: t("reason.desc") });
+    const ta = contentEl.createEl("textarea", { cls: "sc-reason-textarea" });
+    ta.value = this.initial;
+    ta.placeholder = t("reason.placeholder");
+    ta.rows = 3;
+
+    new Setting(contentEl)
+      .setName("")
+      .addButton((btn) =>
+        btn
+          .setButtonText(t("reason.save"))
+          .setCta()
+          .onClick(() => {
+            this.onSubmit(ta.value.trim());
+            this.close();
+          })
+      )
+      .addButton((btn) =>
+        btn.setButtonText(t("reason.skip")).onClick(() => {
+          this.onSubmit("");
+          this.close();
+        })
+      );
+    ta.focus();
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
+/**
+ * Ask for an optional closing reason and store it in `reasons` (empty text
+ * removes any stored reason). Called after the status was already set.
+ */
+function askReason(
+  app: App,
+  reasons: Map<string, string>,
+  title: string,
+  status: StatusDecision
+): void {
+  if (!isTerminalStatus(status)) return;
+  new ReasonPromptModal(app, reasons.get(title) ?? "", (reason) => {
+    if (reason) reasons.set(title, reason);
+    else reasons.delete(title);
+  }).open();
+}
+
+/** Render an optional closing reason as a review-line suffix. */
+function reasonSuffix(reason: string | undefined): string {
+  return reason ? ` · ${reason}` : "";
+}
+
 /** Detail popup: rendered content + per-#### and ### status controls. */
 class RequirementDetailModal extends Modal {
   private chosen: Map<string, StatusDecision>;
+  private reasons: Map<string, string>;
 
   constructor(
     app: App,
     private info: SectionInfo,
     private component: Component,
     initial: Map<string, StatusDecision>,
-    private onPick: (decisions: Map<string, StatusDecision>) => void
+    initialReasons: Map<string, string>,
+    private onPick: (
+      decisions: Map<string, StatusDecision>,
+      reasons: Map<string, string>
+    ) => void
   ) {
     super(app);
     this.chosen = new Map(initial);
+    // Only this requirement's scope travels with the popup.
+    this.reasons = new Map();
+    for (const title of [info.title, ...info.children.map((c) => c.title)]) {
+      const r = initialReasons.get(title);
+      if (r) this.reasons.set(title, r);
+    }
   }
 
   private statusOf(title: string, fallback: StatusDecision): StatusDecision {
@@ -124,6 +211,7 @@ class RequirementDetailModal extends Modal {
         if (!input.checked) return;
         this.chosen.set(this.info.title, value);
         showTip(value);
+        askReason(this.app, this.reasons, this.info.title, value);
       });
       const iconEl = labelEl.createSpan({ cls: `status-icon status-icon-${value}` });
       setIcon(iconEl, STATUS_ICONS[value]);
@@ -152,7 +240,9 @@ class RequirementDetailModal extends Modal {
         }
         dd.setValue(this.statusOf(child.title, child.status)).onChange(
           (value) => {
-            this.chosen.set(child.title, value as StatusDecision);
+            const status = value as StatusDecision;
+            this.chosen.set(child.title, status);
+            askReason(this.app, this.reasons, child.title, status);
           }
         );
       }
@@ -161,7 +251,7 @@ class RequirementDetailModal extends Modal {
     const apply = footer.createEl("button", { cls: "mod-cta" });
     apply.setText(t("modal.apply"));
     apply.addEventListener("click", () => {
-      this.onPick(this.chosen);
+      this.onPick(this.chosen, this.reasons);
       this.close();
     });
   }
@@ -177,6 +267,7 @@ class ReviewChangesModal extends Modal {
     app: App,
     private sections: SectionInfo[],
     private decisions: Map<string, StatusDecision>,
+    private reasons: Map<string, string>,
     private onApply: () => void
   ) {
     super(app);
@@ -216,7 +307,7 @@ class ReviewChangesModal extends Modal {
         item.createSpan({
           cls: "sc-review-effect",
           text: isTerminalStatus(next)
-            ? t("review.willDrop")
+            ? t("review.willDrop") + reasonSuffix(this.reasons.get(info.title))
             : t("review.willCarry"),
         });
       } else {
@@ -245,6 +336,10 @@ class ReviewChangesModal extends Modal {
           cls: "sc-review-new status-" + cnext,
           text: t(`status.${cnext}`),
         });
+        const cReason = this.reasons.get(child.title);
+        if (cReason) {
+          sub.createSpan({ cls: "sc-review-reason", text: "· " + cReason });
+        }
       }
     }
 
@@ -273,6 +368,8 @@ export class SectionConfirmModal extends Modal {
   private onComplete: ((result: ConfirmResult) => void) | null;
   /** title -> the currently selected status for that requirement */
   private selected = new Map<string, StatusDecision>();
+  /** title -> optional closing reason for terminal decisions */
+  private reasons = new Map<string, string>();
 
   constructor(
     app: App,
@@ -330,7 +427,9 @@ export class SectionConfirmModal extends Modal {
       };
 
       dd.setValue(info.status).onChange((value) => {
-        setStatus(value as StatusDecision);
+        const status = value as StatusDecision;
+        setStatus(status);
+        askReason(this.app, this.reasons, info.title, status);
       });
 
       clickable.addEventListener("click", () => {
@@ -351,10 +450,21 @@ export class SectionConfirmModal extends Modal {
           info,
           this.component,
           initial,
-          (picked) => {
+          this.reasons,
+          (picked, pickedReasons) => {
             // Detail edited the ### and/or its ####; store all of them.
             for (const [title, status] of picked) {
               this.selected.set(title, status);
+            }
+            // Reasons are scoped to this requirement: replace the whole scope
+            // so removals inside the popup are reflected here too.
+            for (const title of [
+              info.title,
+              ...info.children.map((c) => c.title),
+            ]) {
+              const r = pickedReasons.get(title);
+              if (r) this.reasons.set(title, r);
+              else this.reasons.delete(title);
             }
             const own = this.selected.get(info.title) ?? info.status;
             row.className = "section-confirm-row status-" + own;
@@ -369,10 +479,17 @@ export class SectionConfirmModal extends Modal {
       .addButton((btn) =>
         btn.setButtonText(t("modal.confirm")).setCta().onClick(() => {
           const decisions = this.collectDecisions();
-          new ReviewChangesModal(this.app, this.sections, decisions, () => {
-            this.onComplete?.({ mode: "rollover", decisions });
-            this.close();
-          }).open();
+          const reasons = this.collectReasons(decisions);
+          new ReviewChangesModal(
+            this.app,
+            this.sections,
+            decisions,
+            reasons,
+            () => {
+              this.onComplete?.({ mode: "rollover", decisions, reasons });
+              this.close();
+            }
+          ).open();
         })
       );
 
@@ -382,7 +499,11 @@ export class SectionConfirmModal extends Modal {
         btn.setButtonText(t("modal.skip")).onClick(() => {
           // Skip = carry over as-is: no decisions, so existing markers are
           // preserved and nothing is stripped.
-          this.onComplete?.({ mode: "rollover", decisions: new Map() });
+          this.onComplete?.({
+            mode: "rollover",
+            decisions: new Map(),
+            reasons: new Map(),
+          });
           this.close();
         })
       );
@@ -425,6 +546,16 @@ export class SectionConfirmModal extends Modal {
       }
     }
     return decisions;
+  }
+
+  /** Closing reasons that still apply: only for titles finally set terminal. */
+  private collectReasons(decisions: Map<string, StatusDecision>): Map<string, string> {
+    const reasons = new Map<string, string>();
+    for (const [title, reason] of this.reasons) {
+      const status = decisions.get(title);
+      if (status && isTerminalStatus(status)) reasons.set(title, reason);
+    }
+    return reasons;
   }
 
   onClose(): void {

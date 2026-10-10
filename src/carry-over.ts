@@ -22,6 +22,7 @@ import {
   getAllTasks,
   needsConfirmation,
   updateHeadingStatus,
+  isTerminalStatus,
 } from "./section-parser";
 
 export interface SubtaskInfo {
@@ -70,9 +71,8 @@ export interface CarryOverResult {
   appliedStatuses: Map<string, SectionStatus>;
 }
 
-function isTerminal(status: SectionStatus): boolean {
-  return status === "done" || status === "cancelled";
-}
+/** Optional closing reasons: section title -> reason text. */
+export type ReasonMap = Map<string, string>;
 
 function effectiveStatus(
   section: Section,
@@ -130,7 +130,7 @@ export function analyzeSectionsForConfirmation(
   function walk(nodes: Section[], parentTitle: string, rootTitle: string): void {
     for (const node of nodes) {
       if (node.level === 3) {
-        if (isTerminal(node.status)) continue; // already closed, skip
+        if (isTerminalStatus(node.status)) continue; // already closed, skip
         const c = countTasks(node);
         result.push({
           title: node.title,
@@ -177,7 +177,7 @@ function renderNode(
 ): string[] {
   const isRequirement = node.level >= 3;
   const status = isRequirement ? effectiveStatus(node, decisions) : node.status;
-  if (isRequirement && isTerminal(status)) return []; // drop closed subtree
+  if (isRequirement && isTerminalStatus(status)) return []; // drop closed subtree
 
   const out: string[] = [];
   out.push(
@@ -224,11 +224,14 @@ export function rolloverMarkdown(
 
 /**
  * Write status markers into yesterday's note. Only ### and #### headings are
- * touched; fixed # / ## skeleton headings are never marked.
+ * touched; fixed # / ## skeleton headings are never marked. A reason from
+ * `reasons` is appended as an HTML comment, but only for terminal statuses
+ * (it documents why the item was closed).
  */
 export function applyStatusDecisions(
   yesterdayMarkdown: string,
-  decisions: Map<string, SectionStatus>
+  decisions: Map<string, SectionStatus>,
+  reasons: ReasonMap = new Map()
 ): string {
   if (decisions.size === 0) {
     return yesterdayMarkdown;
@@ -242,7 +245,14 @@ export function applyStatusDecisions(
       const target =
         node.level >= 3 ? decisions.get(node.title) : undefined;
       if (target !== undefined) {
-        lines[node.lineStart] = updateHeadingStatus(node.heading, target);
+        const reason = isTerminalStatus(target)
+          ? reasons.get(node.title)
+          : undefined;
+        lines[node.lineStart] = updateHeadingStatus(
+          node.heading,
+          target,
+          reason
+        );
       }
       walk(node.children);
     }
@@ -260,14 +270,20 @@ export function applyStatusDecisions(
  *   previous note, i.e. the first day)
  * @param decisions - User's status decisions (section title -> new status)
  * @param deleteCompleted - Whether to remove completed tasks from carried-over content
+ * @param reasons - Optional closing reasons (section title -> comment text)
  */
 export function carryOver(
   yesterdayMarkdown: string,
   todayTemplateMarkdown: string,
   decisions: Map<string, SectionStatus>,
-  deleteCompleted: boolean
+  deleteCompleted: boolean,
+  reasons: ReasonMap = new Map()
 ): CarryOverResult {
-  const updatedYesterday = applyStatusDecisions(yesterdayMarkdown, decisions);
+  const updatedYesterday = applyStatusDecisions(
+    yesterdayMarkdown,
+    decisions,
+    reasons
+  );
   const todayMarkdown = yesterdayMarkdown
     ? rolloverMarkdown(yesterdayMarkdown, decisions, deleteCompleted)
     : todayTemplateMarkdown;

@@ -61,10 +61,35 @@ Content A2`;
     expect(sections[1].status).toBe("cancelled");
   });
 
-  it("defaults to pending status when no marker", () => {
+  it("defaults to in-progress status when no marker", () => {
     const markdown = "## Section A\nContent";
     const sections = parseSections(markdown);
-    expect(sections[0].status).toBe("pending");
+    expect(sections[0].status).toBe("in-progress");
+  });
+
+  it("parses not-started marker", () => {
+    const markdown = "## Section A <!-- req-status: not-started -->\nContent";
+    const sections = parseSections(markdown);
+    expect(sections[0].status).toBe("not-started");
+    expect(sections[0].title).toBe("Section A");
+  });
+
+  it("reads a legacy pending marker as in-progress", () => {
+    const markdown = "## Section A <!-- req-status: pending -->\nContent";
+    const sections = parseSections(markdown);
+    expect(sections[0].status).toBe("in-progress");
+    expect(sections[0].title).toBe("Section A");
+  });
+
+  it("strips a req-reason comment from the title and keeps status detection", () => {
+    const markdown =
+      "### ~~需求A~~ <!-- req-reason: 已上线验证通过 -->\n- [x] done\n" +
+      "### 需求B <!-- req-status: cancelled --> <!-- req-reason: 不做了 -->\ncontent";
+    const sections = parseSections(markdown);
+    expect(sections[0].status).toBe("done");
+    expect(sections[0].title).toBe("需求A");
+    expect(sections[1].status).toBe("cancelled");
+    expect(sections[1].title).toBe("需求B");
   });
 
   it("parses tasks", () => {
@@ -196,9 +221,9 @@ describe("hasPendingWork", () => {
 });
 
 describe("needsConfirmation", () => {
-  it("returns true when all tasks done but status is pending", () => {
+  it("returns true when all tasks done but status is in-progress", () => {
     const markdown =
-      "## Section <!-- req-status: pending -->\n- [x] Done task";
+      "## Section <!-- req-status: in-progress -->\n- [x] Done task";
     const sections = parseSections(markdown);
     expect(needsConfirmation(sections[0])).toBe(true);
   });
@@ -212,13 +237,13 @@ describe("needsConfirmation", () => {
 
   it("returns false when there are unchecked tasks", () => {
     const markdown =
-      "## Section <!-- req-status: pending -->\n- [ ] Pending task";
+      "## Section <!-- req-status: in-progress -->\n- [ ] Pending task";
     const sections = parseSections(markdown);
     expect(needsConfirmation(sections[0])).toBe(false);
   });
 
-  it("returns true when no tasks and status is pending", () => {
-    const markdown = "## Section <!-- req-status: pending -->\nNo tasks";
+  it("returns true when no tasks and status is not-started", () => {
+    const markdown = "## Section <!-- req-status: not-started -->\nNo tasks";
     const sections = parseSections(markdown);
     expect(needsConfirmation(sections[0])).toBe(true);
   });
@@ -226,8 +251,8 @@ describe("needsConfirmation", () => {
 
 describe("buildHeading", () => {
   it("builds heading with status marker", () => {
-    const heading = buildHeading("Test Section", 2, "pending");
-    expect(heading).toBe("## Test Section <!-- req-status: pending -->");
+    const heading = buildHeading("Test Section", 2, "not-started");
+    expect(heading).toBe("## Test Section <!-- req-status: not-started -->");
   });
 
   it("builds level 3 heading", () => {
@@ -266,14 +291,34 @@ describe("updateHeadingStatus", () => {
     expect(updated).toBe("## Section <!-- req-status: cancelled -->");
   });
 
-  it("strips strikethrough and marker when changing to pending (default)", () => {
+  it("strips strikethrough and marker when changing to in-progress (default)", () => {
     const heading = "## ~~Section~~";
-    const updated = updateHeadingStatus(heading, "pending");
+    const updated = updateHeadingStatus(heading, "in-progress");
     expect(updated).toBe("## Section");
   });
 
   it("writes an explicit marker for verifying", () => {
     const updated = updateHeadingStatus("## Section", "verifying");
     expect(updated).toBe("## Section <!-- req-status: verifying -->");
+  });
+
+  it("appends a closing reason comment for done", () => {
+    const updated = updateHeadingStatus("## Section", "done", "已上线验证通过");
+    expect(updated).toBe("## ~~Section~~ <!-- req-reason: 已上线验证通过 -->");
+  });
+
+  it("rewrites status and reason together, never stacking duplicates", () => {
+    const heading = "## Section <!-- req-status: cancelled --> <!-- req-reason: old -->";
+    const updated = updateHeadingStatus(heading, "cancelled", "new reason");
+    expect(updated).toBe(
+      "## Section <!-- req-status: cancelled --> <!-- req-reason: new reason -->"
+    );
+  });
+
+  it("drops a stale reason when reopening, and sanitizes comment breakers", () => {
+    const heading = "## Section <!-- req-status: cancelled --> <!-- req-reason: old -->";
+    expect(updateHeadingStatus(heading, "in-progress")).toBe("## Section");
+    const sneaky = updateHeadingStatus("## S", "cancelled", "a\nb --> <!-- c");
+    expect(sneaky).toBe("## S <!-- req-status: cancelled --> <!-- req-reason: a b c -->");
   });
 });
