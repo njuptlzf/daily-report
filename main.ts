@@ -35,6 +35,7 @@ import {
   analyzeSectionsForConfirmation,
   carryOver,
 } from "./src/carry-over";
+import { rewriteRelativeLinks } from "./src/link-migration";
 import {
   SectionConfirmModal,
   GapChoiceModal,
@@ -205,6 +206,15 @@ export default class DailyReportPlugin extends Plugin {
         todayMarkdown = result.todayMarkdown;
         updatedSource = result.yesterdayMarkdown;
         writeBack = decisions.size > 0;
+
+        // The carried-over content lands in a new file that may live in a
+        // different date folder. Relative file links (e.g. ![](assets/a.png))
+        // were resolved against yesterday's folder, so rewrite them to
+        // vault-absolute paths; otherwise images break in today's note.
+        if (sourceFile) {
+          const migrated = rewriteRelativeLinks(todayMarkdown, sourceFile.path);
+          todayMarkdown = migrated.markdown;
+        }
       }
     } else {
       // No previous report at all: first day uses the template (blank if none).
